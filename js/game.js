@@ -23,6 +23,10 @@ const BALL_SPEED = 280;
 const ITEM_SPEED = 110;
 const MAX_LIVES = 5;
 const RANDOM_DROP_RATE = 0.08;
+const INITIAL_EXPLOSION_DELAY = 0.06;
+const CHAIN_EXPLOSION_DELAY = 0.14;
+const EXPLOSION_EFFECT_DURATION = 0.32;
+const BLOCK_FLASH_DURATION = 0.18;
 
 const EFFECT_DURATIONS = Object.freeze({
   paddle: 12,
@@ -63,6 +67,10 @@ export class BlockBreakerGame {
     this.blockMap = new Map();
     this.balls = [];
     this.items = [];
+    this.pendingExplosions = [];
+    this.explosionEffects = [];
+    this.debris = [];
+    this.nextChainExplosionAt = 0;
     this.effects = { paddleUntil: 0, largeBallUntil: 0, explosiveBallUntil: 0 };
     this.lastEffectSignature = "";
     this.paddle = { x: (BOARD_WIDTH - NORMAL_PADDLE_WIDTH) / 2, y: PADDLE_Y, width: NORMAL_PADDLE_WIDTH, height: 12 };
@@ -89,6 +97,10 @@ export class BlockBreakerGame {
     this.lives = 3;
     this.blocks = this.createBlocks(stage);
     this.blockMap = new Map(this.blocks.map((entry) => [`${entry.gridX},${entry.gridY}`, entry]));
+    this.pendingExplosions = [];
+    this.explosionEffects = [];
+    this.debris = [];
+    this.nextChainExplosionAt = 0;
     this.resetRound(true);
     this.state = "waiting";
     this.callbacks.onStateChange?.(this.state);
@@ -111,6 +123,10 @@ export class BlockBreakerGame {
       maxHp: BLOCK_HP[entry.type],
       active: true,
       exploded: false,
+      explosionScheduled: false,
+      pendingExplosion: false,
+      blastFlash: 0,
+      explosionAt: 0,
     }));
   }
 
@@ -135,6 +151,10 @@ export class BlockBreakerGame {
         this.update(FIXED_STEP);
         this.accumulator -= FIXED_STEP;
       }
+    }
+
+    if (this.state === "running" || this.state === "cleared") {
+      this.updateVisualEffects(frameTime);
     }
 
     this.draw();
@@ -205,6 +225,8 @@ export class BlockBreakerGame {
     this.elapsed += dt;
     this.callbacks.onTimeChange?.(this.elapsed);
     this.updateEffects();
+    this.processPendingExplosions();
+    if (this.state !== "running") return;
 
     for (let index = this.balls.length - 1; index >= 0; index -= 1) {
       const ball = this.balls[index];
@@ -262,55 +284,155 @@ export class BlockBreakerGame {
 
   hitBlock(target, explosiveBall) {
     if (target.type === BLOCK_TYPES.SOLID) {
-      this.callbacks.onSound?.("hit");
+      if (explosiveBall) {
+        this.scheduleBlast(target.gridX, target.gridY, "ball", 0);
+      } else {
+        this.callbacks.onSound?.("hit");
+      }
       return;
     }
 
-    const explosionQueue = [];
-    const destroyed = this.damageBlock(target, 1, explosionQueue);
+    const damageSource = explosiveBall ? "explosiveBall" : "direct";
+    const destroyed = this.damageBlock(target, 1, damageSource);
 
     if (explosiveBall) {
-      this.damageNeighbors(target.gridX, target.gridY, explosionQueue);
-      this.callbacks.onSound?.("explosion");
+      this.scheduleBlast(target.gridX, target.gridY, "ball", 0);
     } else {
       this.callbacks.onSound?.(destroyed ? "break" : "hit");
     }
 
-    while (explosionQueue.length > 0) {
-      const explosive = explosionQueue.shift();
-      this.damageNeighbors(explosive.gridX, explosive.gridY, explosionQueue);
-      this.callbacks.onSound?.("explosion");
-    }
-
-    if (!this.blocks.some((entry) => entry.active && entry.type !== BLOCK_TYPES.SOLID)) {
-      this.finishStage();
-    }
+    this.checkForStageClear();
   }
 
-  damageNeighbors(gridX, gridY, explosionQueue) {
+  scheduleBlast(gridX, gridY, kind, delay, sourceBlock = null) {
+    const triggerAt = this.elapsed + delay;
+    this.pendingExplosions.push({ gridX, gridY, kind, triggerAt, sourceBlock });
+    this.pendingExplosions.sort((a, b) => a.triggerAt - b.triggerAt);
+  }
+
+  scheduleBlockExplosion(target, isChain) {
+    if (target.explosionScheduled) return;
+    target.explosionScheduled = true;
+    target.pendingExplosion = true;
+
+    let triggerAt;
+    if (isChain) {
+      triggerAt = Math.max(this.elapsed + CHAIN_EXPLOSION_DELAY, this.nextChainExplosionAt + CHAIN_EXPLOSION_DELAY);
+      this.nextChainExplosionAt = triggerAt;
+    } else {
+      triggerAt = this.elapsed + INITIAL_EXPLOSION_DELAY;
+      this.nextChainExplosionAt = Math.max(this.nextChainExplosionAt, triggerAt);
+    }
+
+    target.explosionAt = triggerAt;
+    this.pendingExplosions.push({
+      gridX: target.gridX,
+      gridY: target.gridY,
+      kind: "block",
+      triggerAt,
+      sourceBlock: target,
+    });
+    this.pendingExplosions.sort((a, b) => a.triggerAt - b.triggerAt);
+  }
+
+  processPendingExplosions() {
+    while (this.pendingExplosions.length > 0 && this.pendingExplosions[0].triggerAt <= this.elapsed) {
+      const blast = this.pendingExplosions.shift();
+      if (blast.sourceBlock) blast.sourceBlock.pendingExplosion = false;
+      this.createExplosionEffect(blast.gridX, blast.gridY, blast.kind);
+      this.callbacks.onSound?.("explosion");
+      this.damageNeighbors(blast.gridX, blast.gridY);
+    }
+    this.checkForStageClear();
+  }
+
+  damageNeighbors(gridX, gridY) {
     for (let y = gridY - 1; y <= gridY + 1; y += 1) {
       for (let x = gridX - 1; x <= gridX + 1; x += 1) {
         if (x === gridX && y === gridY) continue;
         const neighbor = this.blockMap.get(`${x},${y}`);
         if (neighbor?.active && neighbor.type !== BLOCK_TYPES.SOLID) {
-          this.damageBlock(neighbor, 1, explosionQueue);
+          this.damageBlock(neighbor, 1, "explosion");
         }
       }
     }
   }
 
-  damageBlock(target, damage, explosionQueue) {
+  damageBlock(target, damage, source = "direct") {
     if (!target.active || target.type === BLOCK_TYPES.SOLID) return false;
+    if (source === "explosion" || source === "explosiveBall") {
+      target.blastFlash = BLOCK_FLASH_DURATION;
+    }
     target.hp -= damage;
     if (target.hp > 0) return false;
 
     target.active = false;
     if (target.type === BLOCK_TYPES.EXPLOSIVE && !target.exploded) {
       target.exploded = true;
-      explosionQueue.push(target);
+      this.scheduleBlockExplosion(target, source !== "direct");
+    }
+    if (source === "explosion" || source === "explosiveBall") {
+      this.createBlockDebris(target);
     }
     this.maybeDropItem(target);
     return true;
+  }
+
+  checkForStageClear() {
+    if (this.state !== "running") return;
+    const hasBreakableBlock = this.blocks.some((entry) => entry.active && entry.type !== BLOCK_TYPES.SOLID);
+    if (!hasBreakableBlock && this.pendingExplosions.length === 0) this.finishStage();
+  }
+
+  createExplosionEffect(gridX, gridY, kind) {
+    const cellWidth = (BOARD_WIDTH - GRID_MARGIN_X * 2) / 10;
+    const x = GRID_MARGIN_X + (gridX + 0.5) * cellWidth;
+    const y = GRID_TOP + gridY * GRID_CELL_HEIGHT + BLOCK_HEIGHT / 2;
+    this.explosionEffects.push({ x, y, age: 0, duration: EXPLOSION_EFFECT_DURATION, kind });
+  }
+
+  createBlockDebris(target) {
+    const colors = {
+      [BLOCK_TYPES.NORMAL]: "#58a6ff",
+      [BLOCK_TYPES.HIT_2]: "#ffb84d",
+      [BLOCK_TYPES.HIT_3]: "#c084fc",
+      [BLOCK_TYPES.EXPLOSIVE]: "#ff5f62",
+      [BLOCK_TYPES.ITEM]: "#42d6a4",
+    };
+    const centerX = target.x + target.width / 2;
+    const centerY = target.y + target.height / 2;
+    for (let index = 0; index < 6; index += 1) {
+      const angle = (Math.PI * 2 * index) / 6 + Math.random() * 0.45;
+      const speed = 42 + Math.random() * 58;
+      this.debris.push({
+        x: centerX,
+        y: centerY,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 28,
+        size: 2 + Math.random() * 2.5,
+        color: colors[target.type] || "#ffd166",
+        age: 0,
+        duration: 0.3 + Math.random() * 0.05,
+      });
+    }
+    if (this.debris.length > 240) this.debris.splice(0, this.debris.length - 240);
+  }
+
+  updateVisualEffects(dt) {
+    this.blocks.forEach((entry) => {
+      entry.blastFlash = Math.max(0, entry.blastFlash - dt);
+    });
+
+    this.explosionEffects.forEach((effect) => { effect.age += dt; });
+    this.explosionEffects = this.explosionEffects.filter((effect) => effect.age < effect.duration);
+
+    this.debris.forEach((particle) => {
+      particle.age += dt;
+      particle.vy += 210 * dt;
+      particle.x += particle.vx * dt;
+      particle.y += particle.vy * dt;
+    });
+    this.debris = this.debris.filter((particle) => particle.age < particle.duration);
   }
 
   maybeDropItem(target) {
@@ -481,10 +603,13 @@ export class BlockBreakerGame {
       ctx.stroke();
     }
 
-    this.blocks.forEach((entry) => { if (entry.active) this.drawBlock(entry); });
+    this.blocks.forEach((entry) => { if (entry.active || entry.pendingExplosion) this.drawBlock(entry); });
+    this.explosionEffects.forEach((effect) => this.drawExplosionEffect(effect));
+    this.debris.forEach((particle) => this.drawDebris(particle));
     this.items.forEach((item) => this.drawItem(item));
     this.drawPaddle();
     this.balls.forEach((ball) => this.drawBall(ball));
+    this.drawBoardFrame();
   }
 
   roundedRect(x, y, width, height, radius = 4) {
@@ -513,6 +638,24 @@ export class BlockBreakerGame {
     ctx.strokeStyle = "rgba(255,255,255,.35)";
     ctx.lineWidth = 1;
     ctx.stroke();
+
+    if (entry.blastFlash > 0) {
+      const strength = entry.blastFlash / BLOCK_FLASH_DURATION;
+      this.roundedRect(entry.x, entry.y, entry.width, entry.height, 4);
+      ctx.fillStyle = `rgba(255, 225, 115, ${0.28 + strength * 0.62})`;
+      ctx.fill();
+    }
+
+    if (entry.pendingExplosion) {
+      const remaining = Math.max(0, entry.explosionAt - this.elapsed);
+      const pulse = 0.45 + Math.abs(Math.sin(remaining * 46)) * 0.5;
+      this.roundedRect(entry.x, entry.y, entry.width, entry.height, 4);
+      ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
+      ctx.fill();
+      ctx.strokeStyle = "#ffec70";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
 
     ctx.save();
     ctx.translate(entry.x, entry.y);
@@ -560,6 +703,60 @@ export class BlockBreakerGame {
       ctx.fillStyle = "rgba(255,255,255,.42)";
       ctx.fillRect(5, 4, entry.width - 10, 2);
     }
+    ctx.restore();
+  }
+
+  drawExplosionEffect(effect) {
+    const ctx = this.ctx;
+    const progress = clamp(effect.age / effect.duration, 0, 1);
+    const radius = 8 + progress * 52;
+    const alpha = 1 - progress;
+    const gradient = ctx.createRadialGradient(effect.x, effect.y, 0, effect.x, effect.y, radius);
+    gradient.addColorStop(0, `rgba(255,255,225,${0.9 * alpha})`);
+    gradient.addColorStop(0.24, `rgba(255,213,74,${0.85 * alpha})`);
+    gradient.addColorStop(0.62, `rgba(255,91,45,${0.48 * alpha})`);
+    gradient.addColorStop(1, "rgba(210,30,20,0)");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(effect.x, effect.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = `rgba(255,236,112,${alpha})`;
+    ctx.lineWidth = effect.kind === "block" ? 4 : 3;
+    ctx.beginPath();
+    ctx.arc(effect.x, effect.y, radius * 0.82, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.9})`;
+    ctx.lineWidth = 2;
+    for (let index = 0; index < 8; index += 1) {
+      const angle = index * Math.PI / 4 + progress * 0.18;
+      const inner = radius * 0.28;
+      const outer = radius * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(effect.x + Math.cos(angle) * inner, effect.y + Math.sin(angle) * inner);
+      ctx.lineTo(effect.x + Math.cos(angle) * outer, effect.y + Math.sin(angle) * outer);
+      ctx.stroke();
+    }
+  }
+
+  drawDebris(particle) {
+    const progress = clamp(particle.age / particle.duration, 0, 1);
+    this.ctx.globalAlpha = 1 - progress;
+    this.ctx.fillStyle = particle.color;
+    this.ctx.fillRect(particle.x - particle.size / 2, particle.y - particle.size / 2, particle.size, particle.size);
+    this.ctx.globalAlpha = 1;
+  }
+
+  drawBoardFrame() {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.strokeStyle = "rgba(230, 240, 255, .96)";
+    ctx.lineWidth = 5;
+    ctx.strokeRect(2.5, 2.5, BOARD_WIDTH - 5, BOARD_HEIGHT - 5);
+    ctx.strokeStyle = "rgba(55, 72, 101, .95)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(6, 6, BOARD_WIDTH - 12, BOARD_HEIGHT - 12);
     ctx.restore();
   }
 

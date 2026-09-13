@@ -307,7 +307,10 @@ h1 span {
   max-height: 100%;
   aspect-ratio: 360 / 560;
   background: #111827;
-  box-shadow: 0 0 28px rgba(17, 24, 39, .3);
+  box-shadow:
+    0 0 0 4px #334155,
+    0 0 0 6px rgba(238, 244, 255, .8),
+    0 8px 30px rgba(17, 24, 39, .48);
   touch-action: none;
 }
 
