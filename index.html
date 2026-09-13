@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <title>ブロック崩しメーカー</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <section id="screen-title" class="screen title-screen">
+      <div class="title-card">
+        <p class="brand">MRS GAMES</p>
+        <h1>ブロック崩し<br><span>メーカー</span></h1>
+        <p class="tagline">こわして、クリアして、いつか自分で作ろう！</p>
+        <button id="btn-start" class="btn btn-primary btn-large" type="button">あそぶ</button>
+        <button id="btn-settings" class="btn btn-secondary" type="button">⚙️ サウンド設定</button>
+        <a class="mrs-link" href="https://mrs-games.pages.dev/" target="_blank" rel="noopener">MRS GAMESへ</a>
+      </div>
+    </section>
+
+    <section id="screen-stages" class="screen hidden">
+      <div class="panel stage-panel">
+        <header class="panel-header">
+          <button id="btn-stage-back" class="icon-button" type="button" aria-label="タイトルへ戻る">←</button>
+          <div>
+            <p class="eyebrow">PRESET STAGES</p>
+            <h2>ステージをえらぶ</h2>
+          </div>
+        </header>
+        <div id="stage-list" class="stage-list"></div>
+      </div>
+    </section>
+
+    <section id="screen-game" class="screen game-screen hidden">
+      <header class="game-header">
+        <span id="game-stage-name" class="stage-name">STAGE 01</span>
+        <span id="game-time" class="game-stat">00:00.00</span>
+        <span id="game-lives" class="game-stat lives">♥ 3</span>
+        <button id="btn-pause" class="icon-button" type="button" aria-label="ポーズ">Ⅱ</button>
+      </header>
+      <div id="game-wrap" class="game-wrap">
+        <canvas id="game-canvas" width="360" height="560" aria-label="ブロック崩しのプレイ盤面"></canvas>
+        <div id="effect-bar" class="effect-bar" aria-live="polite"></div>
+        <div id="launch-guide" class="launch-guide">タップで発射</div>
+      </div>
+    </section>
+
+    <section id="screen-clear" class="screen result-screen hidden">
+      <div class="result-card">
+        <p class="result-icon">🎉</p>
+        <p class="eyebrow">STAGE CLEAR</p>
+        <h2 id="clear-stage-name">STAGE 01</h2>
+        <p id="clear-time" class="result-time">00:00.00</p>
+        <p id="best-message" class="best-message"></p>
+        <button id="btn-clear-retry" class="btn btn-primary" type="button">もう一度遊ぶ</button>
+        <button id="btn-clear-stages" class="btn btn-secondary" type="button">他のステージ</button>
+        <button class="btn btn-disabled" type="button" disabled>自分で作る（準備中）</button>
+      </div>
+    </section>
+
+    <section id="screen-gameover" class="screen result-screen hidden">
+      <div class="result-card">
+        <p class="result-icon">💥</p>
+        <p class="eyebrow">GAME OVER</p>
+        <h2>もう一度挑戦！</h2>
+        <button id="btn-gameover-retry" class="btn btn-primary" type="button">リトライ</button>
+        <button id="btn-gameover-stages" class="btn btn-secondary" type="button">他のステージへ</button>
+      </div>
+    </section>
+
+    <div id="modal-pause" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+      <div class="modal-card">
+        <h2 id="pause-title">ポーズ中</h2>
+        <button id="btn-resume" class="btn btn-primary" type="button">つづける</button>
+        <button id="btn-restart" class="btn btn-secondary" type="button">最初から</button>
+        <button id="btn-quit" class="btn btn-secondary" type="button">ステージ選択へ</button>
+      </div>
+    </div>
+
+    <div id="modal-settings" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-card">
+        <h2 id="settings-title">サウンド設定</h2>
+        <button id="toggle-bgm" class="setting-toggle" type="button"><span>BGM</span><strong>ON</strong></button>
+        <button id="toggle-se" class="setting-toggle" type="button"><span>効果音</span><strong>ON</strong></button>
+        <button id="btn-settings-close" class="btn btn-primary" type="button">とじる</button>
+      </div>
+    </div>
+  </main>
+
+  <footer class="ad-banner" aria-label="広告">
+    <div class="ad-inner">
+      <!-- admax -->
+      <script src="https://adm.shinobi.jp/s/8a495d941206bf0c34aff9559f8d2cea"></script>
+      <!-- admax -->
+    </div>
+  </footer>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
