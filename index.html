@@ -40,6 +40,10 @@
         <span id="game-lives" class="game-stat lives">♥ 3</span>
         <button id="btn-pause" class="icon-button" type="button" aria-label="ポーズ">Ⅱ</button>
       </header>
+      <div id="smash-gauge" class="smash-gauge" role="progressbar" aria-label="スマッシュゲージ" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <span id="smash-gauge-fill" class="smash-gauge-fill"></span>
+        <span id="smash-gauge-label" class="smash-gauge-label">SMASH 0%</span>
+      </div>
       <div id="game-wrap" class="game-wrap">
         <canvas id="game-canvas" width="360" height="560" aria-label="ブロック崩しのプレイ盤面"></canvas>
         <div id="effect-bar" class="effect-bar" aria-live="polite"></div>

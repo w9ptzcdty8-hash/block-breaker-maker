@@ -12,6 +12,9 @@ const settingsModal = document.querySelector("#modal-settings");
 const timeElement = document.querySelector("#game-time");
 const livesElement = document.querySelector("#game-lives");
 const stageNameElement = document.querySelector("#game-stage-name");
+const smashGauge = document.querySelector("#smash-gauge");
+const smashGaugeFill = document.querySelector("#smash-gauge-fill");
+const smashGaugeLabel = document.querySelector("#smash-gauge-label");
 const settings = loadSettings();
 const audio = new AudioManager(settings);
 
@@ -44,10 +47,24 @@ function renderEffects(effects) {
   }));
 }
 
+function renderSmashGauge({ ratio, active, ready, remaining }) {
+  const percent = Math.round(ratio * 100);
+  smashGaugeFill.style.transform = `scaleX(${ratio})`;
+  smashGauge.classList.toggle("active", active);
+  smashGauge.classList.toggle("ready", ready && !active);
+  smashGauge.classList.toggle("ending", active && remaining <= 3);
+  smashGaugeLabel.textContent = active
+    ? `SMASH ${remaining.toFixed(1)}s`
+    : ready ? "TAP! SMASH" : `SMASH ${percent}%`;
+  smashGauge.setAttribute("aria-valuenow", String(percent));
+  smashGauge.setAttribute("aria-valuetext", active ? `スマッシュ残り${remaining.toFixed(1)}秒` : ready ? "発動可能" : `${percent}パーセント`);
+}
+
 const game = new BlockBreakerGame(canvas, {
   onTimeChange: (time) => { timeElement.textContent = formatTime(time); },
   onLivesChange: (lives) => { livesElement.textContent = `♥ ${lives}`; },
   onEffectsChange: renderEffects,
+  onSmashChange: renderSmashGauge,
   onSound: (name) => audio.playSe(name),
   onStateChange: (state) => {
     launchGuide.classList.toggle("hidden", state !== "waiting");
@@ -171,7 +188,10 @@ function finishPointer(event) {
   const shouldLaunch = !activePointer.moved && event.type === "pointerup";
   activePointer = null;
   if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-  if (shouldLaunch) game.launch();
+  if (shouldLaunch) {
+    game.activateSmash();
+    game.launch();
+  }
 }
 
 canvas.addEventListener("pointerup", finishPointer);

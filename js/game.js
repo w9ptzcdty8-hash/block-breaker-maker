@@ -28,6 +28,9 @@ const INITIAL_EXPLOSION_DELAY = 0.06;
 const CHAIN_EXPLOSION_DELAY = 0.14;
 const EXPLOSION_EFFECT_DURATION = 0.32;
 const BLOCK_FLASH_DURATION = 0.18;
+const SMASH_MAX_CHARGE = 20;
+const SMASH_DURATION = 10;
+const SMASH_SPEED_MULTIPLIER = 1.2;
 
 const EFFECT_DURATIONS = Object.freeze({
   paddle: 12,
@@ -89,6 +92,11 @@ export class BlockBreakerGame {
     this.nextChainExplosionAt = 0;
     this.effects = { paddleUntil: 0, largeBallUntil: 0, explosiveBallUntil: 0 };
     this.lastEffectSignature = "";
+    this.smashCharge = 0;
+    this.smashActive = false;
+    this.smashRemaining = 0;
+    this.smashFlash = 0;
+    this.lastSmashSignature = "";
     this.blockImages = this.createBlockImages();
     this.paddle = { x: (BOARD_WIDTH - NORMAL_PADDLE_WIDTH) / 2, y: PADDLE_Y, width: NORMAL_PADDLE_WIDTH, height: 12 };
     this.animationId = null;
@@ -129,6 +137,7 @@ export class BlockBreakerGame {
     this.explosionEffects = [];
     this.debris = [];
     this.nextChainExplosionAt = 0;
+    this.resetSmash();
     this.resetRound(true);
     this.state = "waiting";
     this.callbacks.onStateChange?.(this.state);
@@ -193,8 +202,10 @@ export class BlockBreakerGame {
     if (this.state !== "waiting") return false;
     const ball = this.balls[0];
     const direction = Math.random() < 0.5 ? -1 : 1;
-    ball.vx = BALL_SPEED * 0.55 * direction;
-    ball.vy = -Math.sqrt(BALL_SPEED * BALL_SPEED - ball.vx * ball.vx);
+    const speed = BALL_SPEED * (this.smashActive ? SMASH_SPEED_MULTIPLIER : 1);
+    ball.vx = speed * 0.55 * direction;
+    ball.vy = -Math.sqrt(speed * speed - ball.vx * ball.vx);
+    ball.smashBoosted = this.smashActive;
     this.state = "running";
     this.callbacks.onStateChange?.(this.state);
     this.callbacks.onSound?.("launch");
@@ -234,7 +245,11 @@ export class BlockBreakerGame {
       vx: 0,
       vy: 0,
       radius: BALL_RADIUS,
+      smashBoosted: false,
+      smashContacts: new Set(),
+      trail: [],
     }];
+    if (this.smashActive) this.boostBallForSmash(this.balls[0]);
   }
 
   attachWaitingBall() {
@@ -249,9 +264,88 @@ export class BlockBreakerGame {
     this.callbacks.onEffectsChange?.([]);
   }
 
+  resetSmash() {
+    this.smashCharge = 0;
+    this.smashActive = false;
+    this.smashRemaining = 0;
+    this.smashFlash = 0;
+    this.lastSmashSignature = "";
+    this.emitSmash(true);
+  }
+
+  activateSmash() {
+    if (this.smashActive || this.smashCharge < SMASH_MAX_CHARGE) return false;
+    if (this.state !== "running" && this.state !== "waiting") return false;
+    this.smashActive = true;
+    this.smashRemaining = SMASH_DURATION;
+    this.smashFlash = 0.45;
+    this.balls.forEach((ball) => this.boostBallForSmash(ball));
+    this.callbacks.onSound?.("smash");
+    this.emitSmash(true);
+    return true;
+  }
+
+  boostBallForSmash(ball) {
+    if (ball.smashBoosted) return;
+    const speed = Math.hypot(ball.vx, ball.vy);
+    if (speed > 0) {
+      ball.vx *= SMASH_SPEED_MULTIPLIER;
+      ball.vy *= SMASH_SPEED_MULTIPLIER;
+    }
+    ball.smashBoosted = true;
+    ball.smashContacts = new Set();
+    ball.trail = [];
+  }
+
+  endSmash() {
+    this.smashActive = false;
+    this.smashCharge = 0;
+    this.smashRemaining = 0;
+    this.balls.forEach((ball) => {
+      if (ball.smashBoosted && Math.hypot(ball.vx, ball.vy) > 0) {
+        ball.vx /= SMASH_SPEED_MULTIPLIER;
+        ball.vy /= SMASH_SPEED_MULTIPLIER;
+      }
+      ball.smashBoosted = false;
+      ball.smashContacts = new Set();
+      ball.trail = [];
+    });
+    this.emitSmash(true);
+  }
+
+  updateSmash(dt) {
+    if (!this.smashActive) return;
+    this.smashRemaining = Math.max(0, this.smashRemaining - dt);
+    if (this.smashRemaining <= 0) this.endSmash();
+    else this.emitSmash();
+  }
+
+  addSmashCharge(amount) {
+    if (this.smashActive) return;
+    this.smashCharge = Math.min(SMASH_MAX_CHARGE, this.smashCharge + amount);
+    this.emitSmash();
+  }
+
+  emitSmash(force = false) {
+    const ratio = this.smashActive
+      ? this.smashRemaining / SMASH_DURATION
+      : this.smashCharge / SMASH_MAX_CHARGE;
+    const ready = !this.smashActive && this.smashCharge >= SMASH_MAX_CHARGE;
+    const signature = `${this.smashActive}:${ready}:${Math.round(ratio * 100)}:${Math.ceil(this.smashRemaining * 10)}`;
+    if (!force && signature === this.lastSmashSignature) return;
+    this.lastSmashSignature = signature;
+    this.callbacks.onSmashChange?.({
+      ratio: clamp(ratio, 0, 1),
+      active: this.smashActive,
+      ready,
+      remaining: this.smashRemaining,
+    });
+  }
+
   update(dt) {
     this.elapsed += dt;
     this.callbacks.onTimeChange?.(this.elapsed);
+    this.updateSmash(dt);
     this.updateEffects();
     this.processPendingExplosions();
     if (this.state !== "running") return;
@@ -269,6 +363,14 @@ export class BlockBreakerGame {
   }
 
   updateBall(ball, dt) {
+    if (this.smashActive) {
+      ball.trail ??= [];
+      ball.trail.push({ x: ball.x, y: ball.y, radius: ball.radius });
+      if (ball.trail.length > 9) ball.trail.shift();
+    } else if (ball.trail?.length) {
+      ball.trail = [];
+    }
+
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
 
@@ -298,6 +400,11 @@ export class BlockBreakerGame {
       }
     }
 
+    if (this.smashActive) {
+      this.resolveSmashCollisions(ball);
+      return;
+    }
+
     let collisionTarget = null;
     let collisionInfo = null;
     for (const target of this.blocks) {
@@ -311,25 +418,56 @@ export class BlockBreakerGame {
 
     if (collisionTarget && collisionInfo) {
       resolveCollision(ball, collisionInfo);
-      this.hitBlock(collisionTarget, this.isEffectActive("explosiveBall"));
+      this.hitBlock(collisionTarget, this.isEffectActive("explosiveBall") ? "explosiveBall" : "direct");
     }
   }
 
-  hitBlock(target, explosiveBall) {
+  resolveSmashCollisions(ball) {
+    const previousContacts = ball.smashContacts ?? new Set();
+    const currentContacts = new Set();
+    let solidTarget = null;
+    let solidCollision = null;
+
+    for (const target of this.blocks) {
+      if (!target.active) continue;
+      const collision = circleRectCollision(ball, target);
+      if (!collision) continue;
+
+      if (target.type === BLOCK_TYPES.SOLID) {
+        currentContacts.add(target);
+        if (!solidCollision || collision.penetration > solidCollision.penetration) {
+          solidTarget = target;
+          solidCollision = collision;
+        }
+      } else {
+        currentContacts.add(target);
+        if (!previousContacts.has(target)) this.hitBlock(target, "smash");
+      }
+    }
+
+    ball.smashContacts = currentContacts;
+    if (solidTarget && solidCollision) {
+      resolveCollision(ball, solidCollision);
+      if (!previousContacts.has(solidTarget)) this.hitBlock(solidTarget, "smash");
+    }
+  }
+
+  hitBlock(target, attack = "direct") {
+    const explosiveBall = attack === "explosiveBall" || attack === "smash";
     if (target.type === BLOCK_TYPES.SOLID) {
       if (explosiveBall) {
-        this.scheduleBlast(target.gridX, target.gridY, "ball", 0);
+        this.scheduleBlast(target.gridX, target.gridY, attack === "smash" ? "smashBall" : "ball", 0);
       } else {
         this.callbacks.onSound?.("hit");
       }
       return;
     }
 
-    const damageSource = explosiveBall ? "explosiveBall" : "direct";
+    const damageSource = attack === "smash" ? "smash" : explosiveBall ? "explosiveBall" : "direct";
     const destroyed = this.damageBlock(target, 1, damageSource);
 
     if (explosiveBall) {
-      this.scheduleBlast(target.gridX, target.gridY, "ball", 0);
+      this.scheduleBlast(target.gridX, target.gridY, attack === "smash" ? "smashBall" : "ball", 0);
     } else {
       this.callbacks.onSound?.(destroyed ? "break" : "hit");
     }
@@ -374,18 +512,19 @@ export class BlockBreakerGame {
       if (blast.sourceBlock) blast.sourceBlock.pendingExplosion = false;
       this.createExplosionEffect(blast.gridX, blast.gridY, blast.kind);
       this.callbacks.onSound?.("explosion");
-      this.damageNeighbors(blast.gridX, blast.gridY);
+      const damageSource = blast.kind === "ball" ? "explosiveBall" : blast.kind === "smashBall" ? "smash" : "explosion";
+      this.damageNeighbors(blast.gridX, blast.gridY, damageSource);
     }
     this.checkForStageClear();
   }
 
-  damageNeighbors(gridX, gridY) {
+  damageNeighbors(gridX, gridY, source = "explosion") {
     for (let y = gridY - 1; y <= gridY + 1; y += 1) {
       for (let x = gridX - 1; x <= gridX + 1; x += 1) {
         if (x === gridX && y === gridY) continue;
         const neighbor = this.blockMap.get(`${x},${y}`);
         if (neighbor?.active && neighbor.type !== BLOCK_TYPES.SOLID) {
-          this.damageBlock(neighbor, 1, "explosion");
+          this.damageBlock(neighbor, 1, source);
         }
       }
     }
@@ -393,10 +532,11 @@ export class BlockBreakerGame {
 
   damageBlock(target, damage, source = "direct") {
     if (!target.active || target.type === BLOCK_TYPES.SOLID) return false;
-    if (source === "explosion" || source === "explosiveBall") {
+    if (source === "explosion" || source === "explosiveBall" || source === "smash") {
       target.blastFlash = BLOCK_FLASH_DURATION;
     }
     target.hp -= damage;
+    if (source === "direct" || source === "explosiveBall") this.addSmashCharge(damage);
     if (target.hp > 0) return false;
 
     target.active = false;
@@ -404,7 +544,7 @@ export class BlockBreakerGame {
       target.exploded = true;
       this.scheduleBlockExplosion(target, source !== "direct");
     }
-    if (source === "explosion" || source === "explosiveBall") {
+    if (source === "explosion" || source === "explosiveBall" || source === "smash") {
       this.createBlockDebris(target);
     }
     this.maybeDropItem(target);
@@ -452,6 +592,7 @@ export class BlockBreakerGame {
   }
 
   updateVisualEffects(dt) {
+    this.smashFlash = Math.max(0, this.smashFlash - dt);
     this.blocks.forEach((entry) => {
       entry.blastFlash = Math.max(0, entry.blastFlash - dt);
     });
@@ -556,6 +697,9 @@ export class BlockBreakerGame {
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       radius: this.isEffectActive("largeBall") ? LARGE_BALL_RADIUS : BALL_RADIUS,
+      smashBoosted: this.smashActive,
+      smashContacts: new Set(),
+      trail: [],
     });
   }
 
@@ -642,6 +786,7 @@ export class BlockBreakerGame {
     this.items.forEach((item) => this.drawItem(item));
     this.drawPaddle();
     this.balls.forEach((ball) => this.drawBall(ball));
+    this.drawSmashAura();
     this.drawBoardFrame();
   }
 
@@ -816,12 +961,37 @@ export class BlockBreakerGame {
   drawBoardFrame() {
     const ctx = this.ctx;
     ctx.save();
-    ctx.strokeStyle = "rgba(230, 240, 255, .96)";
+    ctx.strokeStyle = this.smashActive ? "rgba(255, 190, 55, .98)" : "rgba(230, 240, 255, .96)";
     ctx.lineWidth = 5;
+    ctx.shadowColor = this.smashActive ? "rgba(255, 92, 24, .9)" : "transparent";
+    ctx.shadowBlur = this.smashActive ? 12 : 0;
     ctx.strokeRect(2.5, 2.5, BOARD_WIDTH - 5, BOARD_HEIGHT - 5);
+    ctx.shadowBlur = 0;
     ctx.strokeStyle = "rgba(55, 72, 101, .95)";
     ctx.lineWidth = 2;
     ctx.strokeRect(6, 6, BOARD_WIDTH - 12, BOARD_HEIGHT - 12);
+    ctx.restore();
+  }
+
+  drawSmashAura() {
+    if (!this.smashActive) return;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.fillStyle = "rgba(255, 100, 20, .035)";
+    ctx.fillRect(7, 7, BOARD_WIDTH - 14, BOARD_HEIGHT - 14);
+
+    if (this.smashFlash > 0) {
+      const strength = this.smashFlash / 0.45;
+      ctx.fillStyle = `rgba(255, 244, 185, ${strength * 0.2})`;
+      ctx.fillRect(7, 7, BOARD_WIDTH - 14, BOARD_HEIGHT - 14);
+      ctx.fillStyle = `rgba(255, 255, 255, ${strength * 0.95})`;
+      ctx.shadowColor = "#ff531f";
+      ctx.shadowBlur = 18;
+      ctx.font = "1000 34px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("SMASH!", BOARD_WIDTH / 2, BOARD_HEIGHT * 0.56);
+    }
     ctx.restore();
   }
 
@@ -840,11 +1010,20 @@ export class BlockBreakerGame {
 
   drawBall(ball) {
     const ctx = this.ctx;
+    if (this.smashActive && ball.trail?.length) {
+      ball.trail.forEach((point, index) => {
+        const alpha = ((index + 1) / ball.trail.length) * 0.34;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, point.radius * (0.45 + index / ball.trail.length * 0.45), 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 190, 45, ${alpha})`;
+        ctx.fill();
+      });
+    }
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-    ctx.fillStyle = this.isEffectActive("explosiveBall") ? "#ff754f" : "#ffffff";
-    ctx.shadowColor = this.isEffectActive("explosiveBall") ? "#ff3b20" : "#75c9ff";
-    ctx.shadowBlur = this.isEffectActive("explosiveBall") ? 13 : 8;
+    ctx.fillStyle = this.smashActive ? "#fff7ad" : this.isEffectActive("explosiveBall") ? "#ff754f" : "#ffffff";
+    ctx.shadowColor = this.smashActive ? "#ff7a18" : this.isEffectActive("explosiveBall") ? "#ff3b20" : "#75c9ff";
+    ctx.shadowBlur = this.smashActive ? 18 : this.isEffectActive("explosiveBall") ? 13 : 8;
     ctx.fill();
     ctx.shadowBlur = 0;
   }

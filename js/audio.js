@@ -53,6 +53,7 @@ export class AudioManager {
       hit: [500, 0.04, 0.03, "square"],
       break: [700, 0.06, 0.035, "triangle"],
       explosion: [95, 0.18, 0.07, "sawtooth"],
+      smash: [180, 0.32, 0.075, "sawtooth"],
       item: [880, 0.12, 0.05, "sine"],
       life: [1046.5, 0.18, 0.055, "sine"],
       miss: [150, 0.28, 0.05, "triangle"],
