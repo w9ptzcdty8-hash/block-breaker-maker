@@ -181,7 +181,7 @@ export const STAGES = [
 
 export function validateStage(stage) {
   if (!stage || stage.schemaVersion !== STAGE_SCHEMA_VERSION) return false;
-  if (!stage.grid || stage.grid.columns !== 10 || ![12, 15].includes(stage.grid.rows)) return false;
+  if (!stage.grid || stage.grid.columns !== 10 || stage.grid.rows !== 12) return false;
   if (!Array.isArray(stage.blocks) || stage.blocks.length === 0 || stage.blocks.length > 120) return false;
 
   const occupied = new Set();
