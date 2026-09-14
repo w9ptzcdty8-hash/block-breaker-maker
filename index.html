@@ -13,8 +13,9 @@
       <div class="title-card">
         <p class="brand">MRS GAMES</p>
         <h1>ブロック崩し<br><span>メーカー</span></h1>
-        <p class="tagline">こわして、クリアして、いつか自分で作ろう！</p>
+        <p class="tagline">こわして、クリアして、自分で作ろう！</p>
         <button id="btn-start" class="btn btn-primary btn-large" type="button">あそぶ</button>
+        <button id="btn-make" class="btn btn-secondary" type="button">🧱 ステージをつくる</button>
         <button id="btn-settings" class="btn btn-secondary" type="button">⚙️ サウンド設定</button>
         <a class="mrs-link" href="https://mrs-games.pages.dev/" target="_blank" rel="noopener">MRS GAMESへ</a>
       </div>
@@ -30,6 +31,48 @@
           </div>
         </header>
         <div id="stage-list" class="stage-list"></div>
+      </div>
+    </section>
+
+    <section id="screen-maker" class="screen maker-screen hidden">
+      <header class="maker-header">
+        <button id="btn-maker-back" class="icon-button" type="button" aria-label="タイトルへ戻る">←</button>
+        <div class="maker-title">
+          <p class="eyebrow">STAGE MAKER</p>
+          <h2 id="maker-stage-name">MY STAGE 0001</h2>
+        </div>
+        <button id="btn-maker-undo" class="maker-history-button" type="button" disabled aria-label="元に戻す">↶</button>
+        <button id="btn-maker-redo" class="maker-history-button" type="button" disabled aria-label="やり直す">↷</button>
+      </header>
+
+      <div class="maker-workspace">
+        <div class="maker-board-shell">
+          <div id="maker-grid" class="maker-grid" aria-label="10列12行の編集盤面"></div>
+        </div>
+      </div>
+
+      <div class="maker-controls">
+        <div class="maker-control-heading">
+          <strong>ブロック</strong>
+          <span id="maker-count">0 / 80</span>
+        </div>
+        <div id="maker-palette" class="maker-palette" aria-label="ブロック種類"></div>
+        <label id="maker-item-settings" class="maker-item-settings hidden">
+          <span>ドロップするアイテム</span>
+          <select id="maker-item-select">
+            <option value="random">ランダム</option>
+            <option value="paddle">パドル拡大</option>
+            <option value="multiball">ボール追加</option>
+            <option value="largeBall">ボール拡大</option>
+            <option value="explosiveBall">爆発ボール</option>
+            <option value="life">1UP</option>
+          </select>
+        </label>
+        <p id="maker-status" class="maker-status" aria-live="polite"></p>
+        <div class="maker-actions">
+          <button id="btn-maker-clear" class="btn btn-secondary maker-action-button" type="button" disabled>全消去</button>
+          <button id="btn-maker-test" class="btn btn-primary maker-action-button" type="button" disabled>▶ テストプレイ</button>
+        </div>
       </div>
     </section>
 
@@ -59,8 +102,9 @@
         <p id="clear-time" class="result-time">00:00.00</p>
         <p id="best-message" class="best-message"></p>
         <button id="btn-clear-retry" class="btn btn-primary" type="button">もう一度遊ぶ</button>
-        <button id="btn-clear-stages" class="btn btn-secondary" type="button">他のステージ</button>
-        <button class="btn btn-disabled" type="button" disabled>自分で作る（準備中）</button>
+        <button id="btn-clear-stages" class="btn btn-secondary preset-only" type="button">他のステージ</button>
+        <button id="btn-clear-make" class="btn btn-secondary preset-only" type="button">自分で作る</button>
+        <button id="btn-clear-editor" class="btn btn-secondary maker-test-only hidden" type="button">編集へ戻る</button>
       </div>
     </section>
 
@@ -70,7 +114,8 @@
         <p class="eyebrow">GAME OVER</p>
         <h2>もう一度挑戦！</h2>
         <button id="btn-gameover-retry" class="btn btn-primary" type="button">リトライ</button>
-        <button id="btn-gameover-stages" class="btn btn-secondary" type="button">他のステージへ</button>
+        <button id="btn-gameover-stages" class="btn btn-secondary preset-only" type="button">他のステージへ</button>
+        <button id="btn-gameover-editor" class="btn btn-secondary maker-test-only hidden" type="button">編集へ戻る</button>
       </div>
     </section>
 
@@ -79,7 +124,8 @@
         <h2 id="pause-title">ポーズ中</h2>
         <button id="btn-resume" class="btn btn-primary" type="button">つづける</button>
         <button id="btn-restart" class="btn btn-secondary" type="button">最初から</button>
-        <button id="btn-quit" class="btn btn-secondary" type="button">ステージ選択へ</button>
+        <button id="btn-quit" class="btn btn-secondary preset-only" type="button">ステージ選択へ</button>
+        <button id="btn-pause-editor" class="btn btn-secondary maker-test-only hidden" type="button">編集へ戻る</button>
       </div>
     </div>
 

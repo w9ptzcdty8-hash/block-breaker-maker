@@ -1,5 +1,6 @@
 import { AudioManager } from "./audio.js";
 import { BlockBreakerGame } from "./game.js";
+import { StageMaker } from "./maker.js";
 import { STAGES } from "./stages.js";
 import { getBestTime, loadSettings, saveBestTime, saveSettings } from "./storage.js";
 
@@ -20,6 +21,7 @@ const audio = new AudioManager(settings);
 
 let currentStage = STAGES[0];
 let activePointer = null;
+let makerTestActive = false;
 
 function formatTime(seconds) {
   const totalHundredths = Math.max(0, Math.floor(seconds * 100));
@@ -74,10 +76,14 @@ const game = new BlockBreakerGame(canvas, {
   onClear: (time) => {
     audio.stopBgm();
     audio.playClear();
-    const result = saveBestTime(currentStage.id, time);
     document.querySelector("#clear-stage-name").textContent = currentStage.title;
     document.querySelector("#clear-time").textContent = formatTime(time);
-    document.querySelector("#best-message").textContent = result.isBest ? "✨ ベストタイム更新！" : `BEST ${formatTime(result.best)}`;
+    if (makerTestActive) {
+      document.querySelector("#best-message").textContent = "テストクリア！編集に戻って調整できます";
+    } else {
+      const result = saveBestTime(currentStage.id, time);
+      document.querySelector("#best-message").textContent = result.isBest ? "✨ ベストタイム更新！" : `BEST ${formatTime(result.best)}`;
+    }
     window.setTimeout(() => showScreen("screen-clear"), 350);
   },
   onGameOver: () => {
@@ -85,6 +91,39 @@ const game = new BlockBreakerGame(canvas, {
     window.setTimeout(() => showScreen("screen-gameover"), 300);
   },
 });
+
+const maker = new StageMaker({
+  grid: document.querySelector("#maker-grid"),
+  palette: document.querySelector("#maker-palette"),
+  itemSettings: document.querySelector("#maker-item-settings"),
+  itemSelect: document.querySelector("#maker-item-select"),
+  count: document.querySelector("#maker-count"),
+  undoButton: document.querySelector("#btn-maker-undo"),
+  redoButton: document.querySelector("#btn-maker-redo"),
+  clearButton: document.querySelector("#btn-maker-clear"),
+  testButton: document.querySelector("#btn-maker-test"),
+  status: document.querySelector("#maker-status"),
+  onTest: (stage) => startStage(stage, { makerTest: true }),
+});
+
+function updateMakerTestNavigation(active) {
+  document.querySelectorAll(".maker-test-only").forEach((element) => element.classList.toggle("hidden", !active));
+  document.querySelectorAll(".preset-only").forEach((element) => element.classList.toggle("hidden", active));
+}
+
+function openMaker() {
+  audio.stopBgm();
+  game.stopLoop();
+  pauseModal.classList.add("hidden");
+  makerTestActive = false;
+  updateMakerTestNavigation(false);
+  maker.render();
+  showScreen("screen-maker");
+}
+
+function returnToMaker() {
+  openMaker();
+}
 
 function buildStageList() {
   const list = document.querySelector("#stage-list");
@@ -99,8 +138,10 @@ function buildStageList() {
   }));
 }
 
-function startStage(stage) {
+function startStage(stage, { makerTest = false } = {}) {
   currentStage = stage;
+  makerTestActive = makerTest;
+  updateMakerTestNavigation(makerTestActive);
   stageNameElement.textContent = stage.title;
   pauseModal.classList.add("hidden");
   showScreen("screen-game");
@@ -111,13 +152,15 @@ function startStage(stage) {
 }
 
 function restartStage() {
-  startStage(currentStage);
+  startStage(currentStage, { makerTest: makerTestActive });
 }
 
 function returnToStages() {
   audio.stopBgm();
   game.stopLoop();
   pauseModal.classList.add("hidden");
+  makerTestActive = false;
+  updateMakerTestNavigation(false);
   buildStageList();
   showScreen("screen-stages");
 }
@@ -127,11 +170,19 @@ document.querySelector("#btn-start").addEventListener("click", () => {
   buildStageList();
   showScreen("screen-stages");
 });
+document.querySelector("#btn-make").addEventListener("click", () => {
+  audio.ensureContext();
+  openMaker();
+});
 document.querySelector("#btn-stage-back").addEventListener("click", () => showScreen("screen-title"));
+document.querySelector("#btn-maker-back").addEventListener("click", () => showScreen("screen-title"));
 document.querySelector("#btn-clear-retry").addEventListener("click", restartStage);
 document.querySelector("#btn-clear-stages").addEventListener("click", returnToStages);
+document.querySelector("#btn-clear-make").addEventListener("click", openMaker);
+document.querySelector("#btn-clear-editor").addEventListener("click", returnToMaker);
 document.querySelector("#btn-gameover-retry").addEventListener("click", restartStage);
 document.querySelector("#btn-gameover-stages").addEventListener("click", returnToStages);
+document.querySelector("#btn-gameover-editor").addEventListener("click", returnToMaker);
 
 document.querySelector("#btn-pause").addEventListener("click", () => {
   if (game.pause()) pauseModal.classList.remove("hidden");
@@ -142,6 +193,7 @@ document.querySelector("#btn-resume").addEventListener("click", () => {
 });
 document.querySelector("#btn-restart").addEventListener("click", restartStage);
 document.querySelector("#btn-quit").addEventListener("click", returnToStages);
+document.querySelector("#btn-pause-editor").addEventListener("click", returnToMaker);
 
 const bgmButton = document.querySelector("#toggle-bgm");
 const seButton = document.querySelector("#toggle-se");

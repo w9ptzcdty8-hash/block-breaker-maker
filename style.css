@@ -153,6 +153,13 @@ h1 span {
   cursor: default;
 }
 
+.btn:disabled,
+button:disabled {
+  opacity: .42;
+  cursor: default;
+  box-shadow: none;
+}
+
 .mrs-link {
   display: inline-block;
   margin-top: 18px;
@@ -247,6 +254,282 @@ h1 span {
   font-size: 11px;
   font-style: normal;
   font-weight: 900;
+}
+
+.maker-screen {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  background: linear-gradient(180deg, #e9eef7, #cbd5e5);
+}
+
+.maker-header {
+  flex: 0 0 auto;
+  min-height: 54px;
+  padding: calc(6px + env(safe-area-inset-top)) 8px 6px;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px 40px;
+  gap: 6px;
+  align-items: center;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  z-index: 5;
+}
+
+.maker-title {
+  min-width: 0;
+}
+
+.maker-title .eyebrow {
+  font-size: 8px;
+}
+
+.maker-title h2 {
+  overflow: hidden;
+  margin-top: 1px;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.maker-history-button {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--ink);
+  background: #eef1f7;
+  font-size: 24px;
+  font-weight: 1000;
+  cursor: pointer;
+}
+
+.maker-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 7px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.maker-board-shell {
+  width: min(100%, 470px);
+  padding: 4px;
+  border: 3px solid #40506a;
+  border-radius: 8px;
+  background: #111827;
+  box-shadow: 0 5px 18px rgba(17, 24, 39, .3);
+}
+
+.maker-grid {
+  width: 100%;
+  aspect-ratio: 360 / 280;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  grid-template-rows: repeat(12, minmax(0, 1fr));
+  gap: 1px;
+  background: #334155;
+  touch-action: none;
+  user-select: none;
+}
+
+.maker-cell {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 2px;
+  background-color: #1b263b;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 108% 128%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .045);
+  touch-action: none;
+}
+
+.maker-cell[data-type="normal"],
+.maker-tool-preview[data-tool="normal"],
+.maker-cell[data-type="item"],
+.maker-tool-preview[data-tool="item"] {
+  background-image: url("assets/images/block-normal.png");
+}
+
+.maker-cell[data-type="hit2"],
+.maker-tool-preview[data-tool="hit2"] {
+  background-image: url("assets/images/block-2hit.png");
+}
+
+.maker-cell[data-type="hit3"],
+.maker-tool-preview[data-tool="hit3"] {
+  background-image: url("assets/images/block-3hit.png");
+}
+
+.maker-cell[data-type="solid"],
+.maker-tool-preview[data-tool="solid"] {
+  background-image: url("assets/images/block-unbreakable.png");
+}
+
+.maker-cell[data-type="explosive"],
+.maker-tool-preview[data-tool="explosive"] {
+  background-image: url("assets/images/block-bomb.png");
+}
+
+.maker-cell[data-type="item"]::after,
+.maker-tool-preview[data-tool="item"]::after {
+  content: "?";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: clamp(7px, 2.7vw, 13px);
+  font-weight: 1000;
+  text-shadow: 0 1px 2px #111827, 1px 0 2px #111827, -1px 0 2px #111827;
+}
+
+.maker-controls {
+  flex: 0 0 auto;
+  width: 100%;
+  max-height: 226px;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  background: rgba(255, 255, 255, .97);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -5px 18px rgba(24, 34, 54, .1);
+}
+
+.maker-control-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 2px 5px;
+  font-size: 11px;
+}
+
+.maker-control-heading span {
+  color: var(--muted);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.maker-palette {
+  display: flex;
+  gap: 6px;
+  padding: 1px 1px 5px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.maker-palette::-webkit-scrollbar {
+  display: none;
+}
+
+.maker-tool {
+  flex: 0 0 60px;
+  padding: 4px;
+  border: 2px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.maker-tool.selected {
+  border-color: var(--secondary);
+  background: #eaf3ff;
+  box-shadow: 0 0 0 2px rgba(47, 128, 237, .18);
+}
+
+.maker-tool-preview {
+  position: relative;
+  width: 100%;
+  height: 25px;
+  display: block;
+  overflow: hidden;
+  border-radius: 4px;
+  background-color: #1b263b;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 108% 128%;
+}
+
+.maker-tool-preview[data-tool="eraser"]::before,
+.maker-tool-preview[data-tool="eraser"]::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 11px;
+  height: 3px;
+  border-radius: 2px;
+  background: #ff6b6b;
+}
+
+.maker-tool-preview[data-tool="eraser"]::before {
+  transform: rotate(35deg);
+}
+
+.maker-tool-preview[data-tool="eraser"]::after {
+  transform: rotate(-35deg);
+}
+
+.maker-tool strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.maker-item-settings {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.maker-item-settings select {
+  min-width: 142px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+
+.maker-status {
+  min-height: 15px;
+  margin: 3px 2px 2px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.maker-status.error {
+  color: #d83245;
+}
+
+.maker-actions {
+  display: grid;
+  grid-template-columns: minmax(90px, .8fr) minmax(150px, 1.4fr);
+  gap: 7px;
+}
+
+.maker-action-button {
+  min-height: 40px;
+  margin-top: 0;
+  padding: 8px 10px;
+  font-size: 12px;
 }
 
 .game-screen {
@@ -522,6 +805,11 @@ h1 span {
   .tagline { margin-bottom: 12px; }
   .mrs-link { margin-top: 11px; }
   .stage-button { min-height: 65px; }
+  .maker-header { min-height: 46px; }
+  .maker-controls { max-height: 178px; padding-top: 5px; }
+  .maker-tool-preview { height: 20px; }
+  .maker-tool { flex-basis: 54px; }
+  .maker-status { display: none; }
 }
 
 @media (min-width: 700px) {
