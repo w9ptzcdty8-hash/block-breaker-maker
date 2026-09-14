@@ -1,9 +1,23 @@
 export const BOARD_WIDTH = 360;
 export const BOARD_HEIGHT = 560;
 export const FIXED_STEP = 1 / 120;
+export const MIN_BOUNCE_ANGLE = Math.PI / 6;
 
 export function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+export function limitShallowAngle(ball) {
+  const speed = Math.hypot(ball.vx, ball.vy);
+  if (speed <= 0) return;
+
+  const minimumVerticalSpeed = speed * Math.sin(MIN_BOUNCE_ANGLE);
+  if (Math.abs(ball.vy) >= minimumVerticalSpeed) return;
+
+  const verticalDirection = ball.vy > 0 ? 1 : -1;
+  const horizontalDirection = ball.vx < 0 ? -1 : 1;
+  ball.vy = minimumVerticalSpeed * verticalDirection;
+  ball.vx = Math.sqrt(Math.max(0, speed * speed - ball.vy * ball.vy)) * horizontalDirection;
 }
 
 export function circleRectCollision(ball, rect) {
@@ -47,6 +61,7 @@ export function resolveCollision(ball, collision) {
   if (dot < 0) {
     ball.vx -= 2 * dot * collision.nx;
     ball.vy -= 2 * dot * collision.ny;
+    limitShallowAngle(ball);
   }
 }
 
@@ -62,5 +77,6 @@ export function reflectFromPaddle(ball, paddle) {
 
   ball.vx = vx;
   ball.vy = -Math.sqrt(Math.max(0, speed * speed - vx * vx));
+  limitShallowAngle(ball);
   ball.y = paddle.y - ball.radius - 0.1;
 }

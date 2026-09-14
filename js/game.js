@@ -4,6 +4,7 @@ import {
   FIXED_STEP,
   circleRectCollision,
   clamp,
+  limitShallowAngle,
   reflectFromPaddle,
   resolveCollision,
 } from "./physics.js";
@@ -51,6 +52,14 @@ const BLOCK_HP = Object.freeze({
   [BLOCK_TYPES.ITEM]: 1,
 });
 
+const BLOCK_IMAGE_URLS = Object.freeze({
+  normal: new URL("../assets/images/block-normal.png", import.meta.url).href,
+  hit2: new URL("../assets/images/block-2hit.png", import.meta.url).href,
+  hit3: new URL("../assets/images/block-3hit.png", import.meta.url).href,
+  solid: new URL("../assets/images/block-unbreakable.png", import.meta.url).href,
+  explosive: new URL("../assets/images/block-bomb.png", import.meta.url).href,
+});
+
 export class BlockBreakerGame {
   constructor(canvas, callbacks = {}) {
     this.canvas = canvas;
@@ -73,9 +82,21 @@ export class BlockBreakerGame {
     this.nextChainExplosionAt = 0;
     this.effects = { paddleUntil: 0, largeBallUntil: 0, explosiveBallUntil: 0 };
     this.lastEffectSignature = "";
+    this.blockImages = this.createBlockImages();
     this.paddle = { x: (BOARD_WIDTH - NORMAL_PADDLE_WIDTH) / 2, y: PADDLE_Y, width: NORMAL_PADDLE_WIDTH, height: 12 };
     this.animationId = null;
     this.loop = this.loop.bind(this);
+  }
+
+  createBlockImages() {
+    if (typeof Image === "undefined") return {};
+    return Object.fromEntries(Object.entries(BLOCK_IMAGE_URLS).map(([key, source]) => {
+      const image = new Image();
+      image.decoding = "async";
+      image.addEventListener("load", () => this.draw(), { once: true });
+      image.src = source;
+      return [key, image];
+    }));
   }
 
   resize() {
@@ -244,18 +265,23 @@ export class BlockBreakerGame {
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
 
+    let reflectedByWall = false;
     if (ball.x - ball.radius < 0) {
       ball.x = ball.radius;
       ball.vx = Math.abs(ball.vx);
+      reflectedByWall = true;
     } else if (ball.x + ball.radius > BOARD_WIDTH) {
       ball.x = BOARD_WIDTH - ball.radius;
       ball.vx = -Math.abs(ball.vx);
+      reflectedByWall = true;
     }
 
     if (ball.y - ball.radius < 0) {
       ball.y = ball.radius;
       ball.vy = Math.abs(ball.vy);
+      reflectedByWall = true;
     }
+    if (reflectedByWall) limitShallowAngle(ball);
 
     if (ball.vy > 0) {
       const paddleCollision = circleRectCollision(ball, this.paddle);
@@ -394,8 +420,8 @@ export class BlockBreakerGame {
   createBlockDebris(target) {
     const colors = {
       [BLOCK_TYPES.NORMAL]: "#58a6ff",
-      [BLOCK_TYPES.HIT_2]: "#ffb84d",
-      [BLOCK_TYPES.HIT_3]: "#c084fc",
+      [BLOCK_TYPES.HIT_2]: "#35dc2f",
+      [BLOCK_TYPES.HIT_3]: "#ff9f1c",
       [BLOCK_TYPES.EXPLOSIVE]: "#ff5f62",
       [BLOCK_TYPES.ITEM]: "#42d6a4",
     };
@@ -618,6 +644,18 @@ export class BlockBreakerGame {
     ctx.roundRect(x, y, width, height, radius);
   }
 
+  getBlockImage(entry) {
+    let key = entry.type;
+    if (entry.type === BLOCK_TYPES.HIT_2 || entry.type === BLOCK_TYPES.HIT_3) {
+      key = entry.hp >= 3 ? "hit3" : entry.hp === 2 ? "hit2" : "normal";
+    } else if (entry.type === BLOCK_TYPES.ITEM) {
+      key = "normal";
+    }
+
+    const image = this.blockImages[key];
+    return image?.complete && image.naturalWidth > 0 ? image : null;
+  }
+
   drawBlock(entry) {
     const ctx = this.ctx;
     const palettes = {
@@ -628,16 +666,21 @@ export class BlockBreakerGame {
       [BLOCK_TYPES.EXPLOSIVE]: ["#ff5f62", "#bd2028"],
       [BLOCK_TYPES.ITEM]: ["#42d6a4", "#12845f"],
     };
-    const palette = palettes[entry.type];
-    const gradient = ctx.createLinearGradient(entry.x, entry.y, entry.x, entry.y + entry.height);
-    gradient.addColorStop(0, palette[0]);
-    gradient.addColorStop(1, palette[1]);
-    this.roundedRect(entry.x, entry.y, entry.width, entry.height, 4);
-    ctx.fillStyle = gradient;
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,.35)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    const blockImage = this.getBlockImage(entry);
+    if (blockImage) {
+      ctx.drawImage(blockImage, entry.x, entry.y, entry.width, entry.height);
+    } else {
+      const palette = palettes[entry.type];
+      const gradient = ctx.createLinearGradient(entry.x, entry.y, entry.x, entry.y + entry.height);
+      gradient.addColorStop(0, palette[0]);
+      gradient.addColorStop(1, palette[1]);
+      this.roundedRect(entry.x, entry.y, entry.width, entry.height, 4);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.35)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
 
     if (entry.blastFlash > 0) {
       const strength = entry.blastFlash / BLOCK_FLASH_DURATION;
@@ -663,7 +706,17 @@ export class BlockBreakerGame {
     ctx.fillStyle = "rgba(255,255,255,.92)";
     ctx.lineWidth = 1.4;
 
-    if (entry.type === BLOCK_TYPES.HIT_2 || entry.type === BLOCK_TYPES.HIT_3) {
+    if (entry.type === BLOCK_TYPES.ITEM) {
+      ctx.font = "900 12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "rgba(18, 32, 55, .85)";
+      ctx.strokeText("?", entry.width / 2, entry.height / 2 + .5);
+      ctx.fillText("?", entry.width / 2, entry.height / 2 + .5);
+    } else if (blockImage) {
+      // The image already contains all type and durability details.
+    } else if (entry.type === BLOCK_TYPES.HIT_2 || entry.type === BLOCK_TYPES.HIT_3) {
       const lines = entry.hp;
       for (let index = 0; index < lines; index += 1) {
         const x = entry.width / 2 + (index - (lines - 1) / 2) * 5;
@@ -694,11 +747,6 @@ export class BlockBreakerGame {
       ctx.beginPath();
       ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
       ctx.fill();
-    } else if (entry.type === BLOCK_TYPES.ITEM) {
-      ctx.font = "900 12px sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("?", entry.width / 2, entry.height / 2 + .5);
     } else {
       ctx.fillStyle = "rgba(255,255,255,.42)";
       ctx.fillRect(5, 4, entry.width - 10, 2);
