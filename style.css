@@ -323,6 +323,14 @@ button:disabled {
   box-shadow: 0 5px 18px rgba(17, 24, 39, .3);
 }
 
+.maker-board-shell,
+.maker-grid,
+.maker-cell {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .maker-grid {
   width: 100%;
   aspect-ratio: 360 / 280;
@@ -332,7 +340,6 @@ button:disabled {
   gap: 1px;
   background: #334155;
   touch-action: none;
-  user-select: none;
 }
 
 .maker-cell {
@@ -349,6 +356,7 @@ button:disabled {
   background-size: 108% 128%;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .045);
   touch-action: none;
+  -webkit-user-drag: none;
 }
 
 .maker-cell[data-type="normal"],
@@ -656,7 +664,7 @@ button:disabled {
 .launch-guide {
   position: absolute;
   left: 50%;
-  bottom: 74px;
+  bottom: 94px;
   transform: translateX(-50%);
   padding: 7px 14px;
   border-radius: 999px;

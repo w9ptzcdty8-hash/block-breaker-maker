@@ -2,7 +2,7 @@ import { BLOCK_TYPES, ITEM_TYPES, STAGE_SCHEMA_VERSION, validateStage } from "./
 
 export const MAKER_COLUMNS = 10;
 export const MAKER_ROWS = 12;
-export const MAKER_MAX_BLOCKS = 100;
+export const MAKER_MAX_BLOCKS = 80;
 const HISTORY_LIMIT = 50;
 
 const TOOL_DEFINITIONS = Object.freeze([
@@ -106,6 +106,8 @@ export class StageMaker {
     this.grid.addEventListener("pointermove", (event) => this.moveStroke(event));
     this.grid.addEventListener("pointerup", (event) => this.endStroke(event));
     this.grid.addEventListener("pointercancel", (event) => this.endStroke(event, true));
+    this.grid.addEventListener("selectstart", (event) => event.preventDefault());
+    this.grid.addEventListener("dragstart", (event) => event.preventDefault());
   }
 
   startStroke(event) {
