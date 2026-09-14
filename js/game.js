@@ -13,8 +13,8 @@ import { BLOCK_TYPES, ITEM_TYPES, validateStage } from "./stages.js";
 const GRID_MARGIN_X = 6;
 const GRID_TOP = 34;
 const GRID_CELL_HEIGHT = 23;
-const BLOCK_GAP = 3;
-const BLOCK_HEIGHT = 18;
+const BLOCK_GAP = 1;
+const BLOCK_HEIGHT = 22;
 const PADDLE_Y = 525;
 const NORMAL_PADDLE_WIDTH = 72;
 const LARGE_PADDLE_WIDTH = 108;
@@ -58,6 +58,13 @@ const BLOCK_IMAGE_URLS = Object.freeze({
   hit3: new URL("../assets/images/block-3hit.png", import.meta.url).href,
   solid: new URL("../assets/images/block-unbreakable.png", import.meta.url).href,
   explosive: new URL("../assets/images/block-bomb.png", import.meta.url).href,
+});
+
+const BLOCK_IMAGE_CROP = Object.freeze({
+  x: 9 / 256,
+  y: 14 / 128,
+  width: 238 / 256,
+  height: 103 / 128,
 });
 
 export class BlockBreakerGame {
@@ -668,7 +675,17 @@ export class BlockBreakerGame {
     };
     const blockImage = this.getBlockImage(entry);
     if (blockImage) {
-      ctx.drawImage(blockImage, entry.x, entry.y, entry.width, entry.height);
+      ctx.drawImage(
+        blockImage,
+        blockImage.naturalWidth * BLOCK_IMAGE_CROP.x,
+        blockImage.naturalHeight * BLOCK_IMAGE_CROP.y,
+        blockImage.naturalWidth * BLOCK_IMAGE_CROP.width,
+        blockImage.naturalHeight * BLOCK_IMAGE_CROP.height,
+        entry.x,
+        entry.y,
+        entry.width,
+        entry.height,
+      );
     } else {
       const palette = palettes[entry.type];
       const gradient = ctx.createLinearGradient(entry.x, entry.y, entry.x, entry.y + entry.height);
