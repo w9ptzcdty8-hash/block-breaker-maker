@@ -34,6 +34,22 @@
       </div>
     </section>
 
+    <section id="screen-maker-library" class="screen hidden">
+      <div class="panel maker-library-panel">
+        <header class="panel-header">
+          <button id="btn-maker-library-back" class="icon-button" type="button" aria-label="タイトルへ戻る">←</button>
+          <div>
+            <p class="eyebrow">MY STAGES</p>
+            <h2>自作ステージ</h2>
+          </div>
+        </header>
+        <button id="btn-maker-new" class="btn btn-primary maker-new-button" type="button">＋ 新しく作る</button>
+        <p class="maker-library-note">この端末・このブラウザにのみ保存されます</p>
+        <p id="maker-library-status" class="maker-library-status" aria-live="polite"></p>
+        <div id="maker-saved-list" class="maker-saved-list"></div>
+      </div>
+    </section>
+
     <section id="screen-maker" class="screen maker-screen hidden">
       <header class="maker-header">
         <button id="btn-maker-back" class="icon-button" type="button" aria-label="タイトルへ戻る">←</button>
@@ -54,7 +70,10 @@
       <div class="maker-controls">
         <div class="maker-control-heading">
           <strong>ブロック</strong>
-          <span id="maker-count">0 / 80</span>
+          <div class="maker-heading-status">
+            <span id="maker-publish-status" class="maker-publish-status">投稿不可</span>
+            <span id="maker-count">0 / 80</span>
+          </div>
         </div>
         <div id="maker-palette" class="maker-palette" aria-label="ブロック種類"></div>
         <label id="maker-item-settings" class="maker-item-settings hidden">
@@ -71,6 +90,7 @@
         <p id="maker-status" class="maker-status" aria-live="polite"></p>
         <div class="maker-actions">
           <button id="btn-maker-clear" class="btn btn-secondary maker-action-button" type="button" disabled>全消去</button>
+          <button id="btn-maker-save" class="btn btn-secondary maker-action-button" type="button" disabled>💾 保存</button>
           <button id="btn-maker-test" class="btn btn-primary maker-action-button" type="button" disabled>▶ テストプレイ</button>
         </div>
       </div>

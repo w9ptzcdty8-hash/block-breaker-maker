@@ -2,7 +2,19 @@ import { AudioManager } from "./audio.js";
 import { BlockBreakerGame } from "./game.js";
 import { StageMaker } from "./maker.js";
 import { STAGES } from "./stages.js";
-import { getBestTime, loadSettings, saveBestTime, saveSettings } from "./storage.js";
+import {
+  deleteMakerStage,
+  getBestTime,
+  getMakerStageFingerprint,
+  getNextMakerTitle,
+  isMakerStageCleared,
+  loadMakerLibrary,
+  loadSettings,
+  MAX_LOCAL_STAGES,
+  saveBestTime,
+  saveMakerStage,
+  saveSettings,
+} from "./storage.js";
 
 const screens = [...document.querySelectorAll(".screen")];
 const canvas = document.querySelector("#game-canvas");
@@ -24,6 +36,9 @@ const audio = new AudioManager(settings);
 let currentStage = STAGES[0];
 let activePointer = null;
 let makerTestActive = false;
+let currentMakerRecord = null;
+let draftClear = null;
+let makerTestFingerprint = "";
 
 function formatTime(seconds) {
   const totalHundredths = Math.max(0, Math.floor(seconds * 100));
@@ -81,7 +96,32 @@ const game = new BlockBreakerGame(canvas, {
     document.querySelector("#clear-stage-name").textContent = currentStage.title;
     document.querySelector("#clear-time").textContent = formatTime(time);
     if (makerTestActive) {
-      document.querySelector("#best-message").textContent = "テストクリア！編集に戻って調整できます";
+      draftClear = {
+        fingerprint: makerTestFingerprint || getMakerStageFingerprint(currentStage),
+        time,
+      };
+      if (currentMakerRecord) {
+        const saveResult = saveMakerStage(currentStage, {
+          stageId: currentMakerRecord.id,
+          authorClearTime: time,
+          clearedFingerprint: draftClear.fingerprint,
+        });
+        if (saveResult.ok) {
+          currentMakerRecord = saveResult.record;
+          draftClear = {
+            fingerprint: saveResult.record.clearedFingerprint,
+            time: saveResult.record.authorClearTime,
+          };
+          maker.setIdentity(saveResult.record.id, saveResult.record.title);
+          document.querySelector("#best-message").textContent = "テストクリア！投稿可能になりました";
+        } else {
+          document.querySelector("#best-message").textContent = "クリアしましたが保存に失敗しました";
+          maker.setStatus(saveResult.error, true);
+        }
+      } else {
+        document.querySelector("#best-message").textContent = "テストクリア！保存すると投稿可能状態を残せます";
+      }
+      updateMakerPublishStatus();
     } else {
       const result = saveBestTime(currentStage.id, time);
       document.querySelector("#best-message").textContent = result.isBest ? "✨ ベストタイム更新！" : `BEST ${formatTime(result.best)}`;
@@ -100,12 +140,23 @@ const maker = new StageMaker({
   itemSettings: document.querySelector("#maker-item-settings"),
   itemSelect: document.querySelector("#maker-item-select"),
   count: document.querySelector("#maker-count"),
+  nameElement: document.querySelector("#maker-stage-name"),
+  publishStatus: document.querySelector("#maker-publish-status"),
   undoButton: document.querySelector("#btn-maker-undo"),
   redoButton: document.querySelector("#btn-maker-redo"),
   clearButton: document.querySelector("#btn-maker-clear"),
+  saveButton: document.querySelector("#btn-maker-save"),
   testButton: document.querySelector("#btn-maker-test"),
   status: document.querySelector("#maker-status"),
-  onTest: (stage) => startStage(stage, { makerTest: true }),
+  onSave: saveCurrentMakerStage,
+  onTest: (stage) => {
+    makerTestFingerprint = getMakerStageFingerprint(stage);
+    startStage(stage, { makerTest: true });
+  },
+  onChange: () => {
+    draftClear = null;
+    updateMakerPublishStatus();
+  },
 });
 
 function updateMakerTestNavigation(active) {
@@ -113,18 +164,148 @@ function updateMakerTestNavigation(active) {
   document.querySelectorAll(".preset-only").forEach((element) => element.classList.toggle("hidden", active));
 }
 
-function openMaker() {
+function prepareMakerScreen() {
   audio.stopBgm();
   game.stopLoop();
   pauseModal.classList.add("hidden");
   makerTestActive = false;
   updateMakerTestNavigation(false);
-  maker.render();
+}
+
+function updateMakerPublishStatus() {
+  const stage = maker.getStage();
+  const fingerprint = getMakerStageFingerprint(stage);
+  const ready = maker.hasBreakableBlock()
+    && draftClear?.fingerprint === fingerprint
+    && Number.isFinite(draftClear?.time);
+  maker.setPublishStatus(
+    ready ? `投稿可能・CLEAR ${formatTime(draftClear.time)}` : "投稿不可",
+    ready,
+  );
+}
+
+function saveCurrentMakerStage(stage) {
+  const fingerprint = getMakerStageFingerprint(stage);
+  const clearIsCurrent = draftClear?.fingerprint === fingerprint;
+  const result = saveMakerStage(stage, {
+    stageId: currentMakerRecord?.id || null,
+    authorClearTime: clearIsCurrent ? draftClear.time : null,
+    clearedFingerprint: clearIsCurrent ? draftClear.fingerprint : null,
+  });
+  if (!result.ok) {
+    maker.setStatus(result.error, true);
+    return;
+  }
+  currentMakerRecord = result.record;
+  maker.setIdentity(result.record.id, result.record.title);
+  draftClear = isMakerStageCleared(result.record)
+    ? { fingerprint: result.record.clearedFingerprint, time: result.record.authorClearTime }
+    : null;
+  maker.setStatus("端末内に保存しました");
+  updateMakerPublishStatus();
+}
+
+function buildMakerLibrary() {
+  const list = document.querySelector("#maker-saved-list");
+  const status = document.querySelector("#maker-library-status");
+  const newButton = document.querySelector("#btn-maker-new");
+  const library = loadMakerLibrary();
+  status.textContent = library.error || "";
+  status.classList.toggle("error", !library.ok);
+  newButton.disabled = library.ok && library.stages.length >= MAX_LOCAL_STAGES;
+
+  if (library.ok && library.stages.length >= MAX_LOCAL_STAGES) {
+    status.textContent = "保存上限は10ステージです。不要なステージを削除してください";
+  }
+
+  const records = library.stages.slice().sort((a, b) => b.updatedAt - a.updatedAt);
+  if (records.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "maker-empty";
+    empty.textContent = "保存されたステージはありません";
+    list.replaceChildren(empty);
+    return;
+  }
+
+  list.replaceChildren(...records.map((record) => {
+    const card = document.createElement("article");
+    card.className = "maker-saved-card";
+
+    const info = document.createElement("div");
+    info.className = "maker-saved-info";
+    const title = document.createElement("strong");
+    title.textContent = record.title;
+    const state = document.createElement("span");
+    const cleared = isMakerStageCleared(record);
+    state.classList.toggle("ready", cleared);
+    state.textContent = cleared
+      ? `投稿可能・CLEAR ${formatTime(record.authorClearTime)}`
+      : "投稿不可・テストクリアが必要";
+    info.append(title, state);
+
+    const actions = document.createElement("div");
+    actions.className = "maker-saved-actions";
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.className = "maker-card-button maker-card-edit";
+    editButton.textContent = "編集";
+    editButton.addEventListener("click", () => openSavedMaker(record));
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "maker-card-button maker-card-delete";
+    deleteButton.textContent = "削除";
+    deleteButton.addEventListener("click", () => {
+      if (!window.confirm(record.title + "を削除しますか？")) return;
+      const result = deleteMakerStage(record.id);
+      if (!result.ok) {
+        status.textContent = result.error;
+        status.classList.add("error");
+        return;
+      }
+      buildMakerLibrary();
+    });
+    actions.append(editButton, deleteButton);
+    card.append(info, actions);
+    return card;
+  }));
+}
+
+function openMakerLibrary() {
+  prepareMakerScreen();
+  buildMakerLibrary();
+  showScreen("screen-maker-library");
+}
+
+function openNewMaker() {
+  prepareMakerScreen();
+  currentMakerRecord = null;
+  draftClear = null;
+  maker.reset({ title: getNextMakerTitle() });
+  updateMakerPublishStatus();
+  showScreen("screen-maker");
+}
+
+function openSavedMaker(record) {
+  prepareMakerScreen();
+  if (!maker.loadStage(record.stage)) {
+    const status = document.querySelector("#maker-library-status");
+    status.textContent = "このステージは読み込めません";
+    status.classList.add("error");
+    return;
+  }
+  currentMakerRecord = record;
+  draftClear = isMakerStageCleared(record)
+    ? { fingerprint: record.clearedFingerprint, time: record.authorClearTime }
+    : null;
+  updateMakerPublishStatus();
   showScreen("screen-maker");
 }
 
 function returnToMaker() {
-  openMaker();
+  prepareMakerScreen();
+  maker.render();
+  updateMakerPublishStatus();
+  showScreen("screen-maker");
 }
 
 function buildStageList() {
@@ -174,13 +355,15 @@ document.querySelector("#btn-start").addEventListener("click", () => {
 });
 document.querySelector("#btn-make").addEventListener("click", () => {
   audio.ensureContext();
-  openMaker();
+  openMakerLibrary();
 });
 document.querySelector("#btn-stage-back").addEventListener("click", () => showScreen("screen-title"));
-document.querySelector("#btn-maker-back").addEventListener("click", () => showScreen("screen-title"));
+document.querySelector("#btn-maker-library-back").addEventListener("click", () => showScreen("screen-title"));
+document.querySelector("#btn-maker-new").addEventListener("click", openNewMaker);
+document.querySelector("#btn-maker-back").addEventListener("click", openMakerLibrary);
 document.querySelector("#btn-clear-retry").addEventListener("click", restartStage);
 document.querySelector("#btn-clear-stages").addEventListener("click", returnToStages);
-document.querySelector("#btn-clear-make").addEventListener("click", openMaker);
+document.querySelector("#btn-clear-make").addEventListener("click", openNewMaker);
 document.querySelector("#btn-clear-editor").addEventListener("click", returnToMaker);
 document.querySelector("#btn-gameover-retry").addEventListener("click", restartStage);
 document.querySelector("#btn-gameover-stages").addEventListener("click", returnToStages);

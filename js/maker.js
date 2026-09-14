@@ -26,12 +26,17 @@ export class StageMaker {
     itemSettings,
     itemSelect,
     count,
+    nameElement,
+    publishStatus,
     undoButton,
     redoButton,
     clearButton,
+    saveButton,
     testButton,
     status,
+    onSave,
     onTest,
+    onChange,
     confirmClear = () => window.confirm("配置したブロックをすべて消しますか？"),
   }) {
     this.grid = grid;
@@ -39,12 +44,17 @@ export class StageMaker {
     this.itemSettings = itemSettings;
     this.itemSelect = itemSelect;
     this.count = count;
+    this.nameElement = nameElement;
+    this.publishStatus = publishStatus;
     this.undoButton = undoButton;
     this.redoButton = redoButton;
     this.clearButton = clearButton;
+    this.saveButton = saveButton;
     this.testButton = testButton;
     this.status = status;
+    this.onSave = onSave;
     this.onTest = onTest;
+    this.onChange = onChange;
     this.confirmClear = confirmClear;
     this.cells = Array(MAKER_COLUMNS * MAKER_ROWS).fill(null);
     this.selectedTool = BLOCK_TYPES.NORMAL;
@@ -52,6 +62,7 @@ export class StageMaker {
     this.history = [];
     this.future = [];
     this.activeStroke = null;
+    this.stageId = null;
     this.name = "MY STAGE 0001";
     this.build();
     this.bindEvents();
@@ -98,6 +109,10 @@ export class StageMaker {
     this.undoButton.addEventListener("click", () => this.undo());
     this.redoButton.addEventListener("click", () => this.redo());
     this.clearButton.addEventListener("click", () => this.clear());
+    this.saveButton.addEventListener("click", () => {
+      const stage = this.createStage();
+      if (stage) this.onSave?.(stage);
+    });
     this.testButton.addEventListener("click", () => {
       const stage = this.createStage();
       if (stage) this.onTest?.(stage);
@@ -159,6 +174,7 @@ export class StageMaker {
       if (this.history.length > HISTORY_LIMIT) this.history.shift();
       this.future = [];
       this.render();
+      this.onChange?.();
     }
   }
 
@@ -206,6 +222,7 @@ export class StageMaker {
     this.future.push(cloneCells(this.cells));
     this.cells = this.history.pop();
     this.render();
+    this.onChange?.();
   }
 
   redo() {
@@ -213,6 +230,7 @@ export class StageMaker {
     this.history.push(cloneCells(this.cells));
     this.cells = this.future.pop();
     this.render();
+    this.onChange?.();
   }
 
   clear() {
@@ -222,6 +240,44 @@ export class StageMaker {
     this.future = [];
     this.cells = Array(this.cells.length).fill(null);
     this.render();
+    this.onChange?.();
+  }
+
+  reset({ title = "MY STAGE 0001" } = {}) {
+    this.stageId = null;
+    this.name = title;
+    this.cells = Array(MAKER_COLUMNS * MAKER_ROWS).fill(null);
+    this.history = [];
+    this.future = [];
+    this.activeStroke = null;
+    this.setStatus("ブロックを選んで盤面をなぞれます");
+    this.render();
+  }
+
+  loadStage(stage) {
+    if (!validateStage(stage) || stage.blocks.length > MAKER_MAX_BLOCKS) return false;
+    this.stageId = stage.id;
+    this.name = stage.title;
+    this.cells = Array(MAKER_COLUMNS * MAKER_ROWS).fill(null);
+    stage.blocks.forEach((entry) => {
+      const index = entry.y * MAKER_COLUMNS + entry.x;
+      this.cells[index] = {
+        type: entry.type,
+        ...(entry.type === BLOCK_TYPES.ITEM ? { item: entry.item } : {}),
+      };
+    });
+    this.history = [];
+    this.future = [];
+    this.activeStroke = null;
+    this.setStatus("保存したステージを読み込みました");
+    this.render();
+    return true;
+  }
+
+  setIdentity(id, title) {
+    this.stageId = id;
+    this.name = title;
+    this.renderControls();
   }
 
   blockCount() {
@@ -232,12 +288,7 @@ export class StageMaker {
     return this.cells.some((entry) => entry && entry.type !== BLOCK_TYPES.SOLID);
   }
 
-  createStage() {
-    if (!this.hasBreakableBlock()) {
-      this.setStatus("破壊できるブロックを1個以上置いてください", true);
-      return null;
-    }
-
+  getStage() {
     const blocks = [];
     this.cells.forEach((entry, index) => {
       if (!entry) return;
@@ -249,15 +300,23 @@ export class StageMaker {
       });
     });
 
-    const stage = {
+    return {
       schemaVersion: STAGE_SCHEMA_VERSION,
-      id: "maker-session-stage",
+      id: this.stageId || "maker-session-stage",
       title: this.name,
       subtitle: "自作ステージ・テストプレイ",
       grid: { columns: MAKER_COLUMNS, rows: MAKER_ROWS },
       blocks,
     };
+  }
 
+  createStage() {
+    if (!this.hasBreakableBlock()) {
+      this.setStatus("破壊できるブロックを1個以上置いてください", true);
+      return null;
+    }
+
+    const stage = this.getStage();
     if (!validateStage(stage)) {
       this.setStatus("ステージの内容を確認してください", true);
       return null;
@@ -299,7 +358,9 @@ export class StageMaker {
     this.undoButton.disabled = this.history.length === 0;
     this.redoButton.disabled = this.future.length === 0;
     this.clearButton.disabled = this.blockCount() === 0;
+    this.saveButton.disabled = !this.hasBreakableBlock();
     this.testButton.disabled = !this.hasBreakableBlock();
+    this.nameElement.textContent = this.name;
     this.count.textContent = `${this.blockCount()} / ${MAKER_MAX_BLOCKS}`;
     if (!this.status.textContent) this.setStatus("ブロックを選んで盤面をなぞれます");
   }
@@ -307,6 +368,11 @@ export class StageMaker {
   setStatus(message, error = false) {
     this.status.textContent = message;
     this.status.classList.toggle("error", error);
+  }
+
+  setPublishStatus(message, ready = false) {
+    this.publishStatus.textContent = message;
+    this.publishStatus.classList.toggle("ready", ready);
   }
 
   render() {
