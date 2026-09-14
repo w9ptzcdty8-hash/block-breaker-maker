@@ -638,6 +638,13 @@ button:disabled {
   to { opacity: .58; }
 }
 
+.game-screen,
+.game-screen * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .game-wrap {
   position: relative;
   flex: 1 1 auto;
@@ -649,6 +656,7 @@ button:disabled {
   justify-content: center;
   overflow: hidden;
   background: linear-gradient(180deg, #cad4e4, #aebbd0);
+  touch-action: none;
 }
 
 #game-canvas {

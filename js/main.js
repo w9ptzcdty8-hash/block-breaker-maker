@@ -6,6 +6,8 @@ import { getBestTime, loadSettings, saveBestTime, saveSettings } from "./storage
 
 const screens = [...document.querySelectorAll(".screen")];
 const canvas = document.querySelector("#game-canvas");
+const gameScreen = document.querySelector("#screen-game");
+const gameWrap = document.querySelector("#game-wrap");
 const launchGuide = document.querySelector("#launch-guide");
 const effectBar = document.querySelector("#effect-bar");
 const pauseModal = document.querySelector("#modal-pause");
@@ -248,6 +250,30 @@ function finishPointer(event) {
 
 canvas.addEventListener("pointerup", finishPointer);
 canvas.addEventListener("pointercancel", finishPointer);
+
+function clearGameSelection() {
+  const selection = window.getSelection?.();
+  if (selection?.rangeCount) selection.removeAllRanges();
+}
+
+function preventNativeGameGesture(event) {
+  if (event.cancelable) event.preventDefault();
+  clearGameSelection();
+}
+
+gameWrap.addEventListener("selectstart", preventNativeGameGesture, true);
+gameWrap.addEventListener("dragstart", preventNativeGameGesture, true);
+gameWrap.addEventListener("dblclick", preventNativeGameGesture, true);
+gameWrap.addEventListener("contextmenu", preventNativeGameGesture, true);
+["touchstart", "touchmove", "touchend"].forEach((type) => {
+  gameWrap.addEventListener(type, preventNativeGameGesture, { passive: false, capture: true });
+});
+["gesturestart", "gesturechange", "gestureend"].forEach((type) => {
+  gameWrap.addEventListener(type, preventNativeGameGesture, true);
+});
+document.addEventListener("selectionchange", () => {
+  if (!gameScreen.classList.contains("hidden")) clearGameSelection();
+});
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && game.pause()) pauseModal.classList.remove("hidden");
