@@ -64,6 +64,7 @@ export class StageMaker {
       const cell = document.createElement("button");
       cell.type = "button";
       cell.className = "maker-cell";
+      cell.draggable = false;
       cell.dataset.index = String(index);
       cell.setAttribute("aria-label", this.cellLabel(index));
       cellFragment.append(cell);
@@ -106,8 +107,19 @@ export class StageMaker {
     this.grid.addEventListener("pointermove", (event) => this.moveStroke(event));
     this.grid.addEventListener("pointerup", (event) => this.endStroke(event));
     this.grid.addEventListener("pointercancel", (event) => this.endStroke(event, true));
-    this.grid.addEventListener("selectstart", (event) => event.preventDefault());
-    this.grid.addEventListener("dragstart", (event) => event.preventDefault());
+    const preventNativeGesture = (event) => {
+      if (event.cancelable) event.preventDefault();
+    };
+    this.grid.addEventListener("selectstart", preventNativeGesture);
+    this.grid.addEventListener("dragstart", preventNativeGesture);
+    this.grid.addEventListener("dblclick", preventNativeGesture);
+    this.grid.addEventListener("contextmenu", preventNativeGesture);
+    ["touchstart", "touchmove", "touchend"].forEach((type) => {
+      this.grid.addEventListener(type, preventNativeGesture, { passive: false });
+    });
+    ["gesturestart", "gesturechange", "gestureend"].forEach((type) => {
+      this.grid.addEventListener(type, preventNativeGesture);
+    });
   }
 
   startStroke(event) {

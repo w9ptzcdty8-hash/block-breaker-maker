@@ -323,12 +323,19 @@ button:disabled {
   box-shadow: 0 5px 18px rgba(17, 24, 39, .3);
 }
 
+.maker-workspace,
 .maker-board-shell,
 .maker-grid,
 .maker-cell {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+
+.maker-board-shell,
+.maker-grid,
+.maker-cell {
+  touch-action: none;
 }
 
 .maker-grid {
@@ -339,7 +346,6 @@ button:disabled {
   grid-template-rows: repeat(12, minmax(0, 1fr));
   gap: 1px;
   background: #334155;
-  touch-action: none;
 }
 
 .maker-cell {
@@ -355,7 +361,6 @@ button:disabled {
   background-repeat: no-repeat;
   background-size: 108% 128%;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .045);
-  touch-action: none;
   -webkit-user-drag: none;
 }
 
