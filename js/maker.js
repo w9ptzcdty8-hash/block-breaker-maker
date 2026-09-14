@@ -1,8 +1,8 @@
 import { BLOCK_TYPES, ITEM_TYPES, STAGE_SCHEMA_VERSION, validateStage } from "./stages.js";
 
 export const MAKER_COLUMNS = 10;
-export const MAKER_ROWS = 12;
-export const MAKER_MAX_BLOCKS = 80;
+export const MAKER_ROWS = 15;
+export const MAKER_MAX_BLOCKS = 100;
 const HISTORY_LIMIT = 50;
 
 const TOOL_DEFINITIONS = Object.freeze([

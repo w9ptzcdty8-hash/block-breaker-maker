@@ -325,10 +325,10 @@ button:disabled {
 
 .maker-grid {
   width: 100%;
-  aspect-ratio: 360 / 280;
+  aspect-ratio: 360 / 350;
   display: grid;
   grid-template-columns: repeat(10, minmax(0, 1fr));
-  grid-template-rows: repeat(12, minmax(0, 1fr));
+  grid-template-rows: repeat(15, minmax(0, 1fr));
   gap: 1px;
   background: #334155;
   touch-action: none;

@@ -181,7 +181,7 @@ export const STAGES = [
 
 export function validateStage(stage) {
   if (!stage || stage.schemaVersion !== STAGE_SCHEMA_VERSION) return false;
-  if (!stage.grid || stage.grid.columns !== 10 || stage.grid.rows !== 12) return false;
+  if (!stage.grid || stage.grid.columns !== 10 || ![12, 15].includes(stage.grid.rows)) return false;
   if (!Array.isArray(stage.blocks) || stage.blocks.length === 0 || stage.blocks.length > 120) return false;
 
   const occupied = new Set();
@@ -190,7 +190,7 @@ export function validateStage(stage) {
 
   for (const entry of stage.blocks) {
     if (!Number.isInteger(entry.x) || !Number.isInteger(entry.y)) return false;
-    if (entry.x < 0 || entry.x >= 10 || entry.y < 0 || entry.y >= 12) return false;
+    if (entry.x < 0 || entry.x >= stage.grid.columns || entry.y < 0 || entry.y >= stage.grid.rows) return false;
     if (!validTypes.has(entry.type)) return false;
     if (entry.type === BLOCK_TYPES.ITEM && !validItems.has(entry.item)) return false;
     const key = `${entry.x},${entry.y}`;
