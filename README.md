@@ -29,3 +29,21 @@ Phase 1：基本ゲーム＋プリセット10ステージ
 4. Cloudflare D1による投稿・ランキング・共有
 
 ステージデータには`schemaVersion`を持たせ、プリセット・ローカル保存・投稿ステージで共通利用できる構造にしています。
+
+## Phase 4A：投稿・個別URL
+
+作者がテストクリアした端末内ステージをCloudflare Pages FunctionsからD1へ投稿し、`/s/<公開ID>`で他のユーザーが直接プレイできます。
+
+- 投稿API：`POST /api/stages`
+- 取得API：`GET /api/stages/<公開ID>`
+- 個別URL：`GET /s/<公開ID>`
+- D1マイグレーション：`migrations/0001-phase-4a.sql`
+- Pages Functions対象：`_routes.json`の`/api/*`と`/s/*`のみ
+
+Pagesには次の環境設定が必要です。
+
+- D1バインディング：`STAGES_DB`（本番・プレビューは別DB）
+- Secret：`RATE_LIMIT_SALT`（本番・プレビューは別値を推奨）
+
+公開済みデータはAPIから変更しません。端末内の元ステージは投稿後も編集でき、配置を変更すると作者クリア状態が無効になります。再度テストクリアして投稿すると、新しい公開IDが発行されます。
+

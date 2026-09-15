@@ -147,6 +147,12 @@ h1 span {
   border: 2px solid var(--line);
 }
 
+.btn-publish {
+  color: #fff;
+  background: linear-gradient(180deg, #2f80ed, #1767c8);
+  box-shadow: 0 5px 0 #0d4c9a;
+}
+
 .btn-disabled {
   color: #8c93a4;
   background: #eceff5;
@@ -664,7 +670,7 @@ button:disabled {
 
 .maker-actions {
   display: grid;
-  grid-template-columns: minmax(70px, .7fr) minmax(78px, .85fr) minmax(126px, 1.35fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -673,6 +679,29 @@ button:disabled {
   margin-top: 0;
   padding: 8px 10px;
   font-size: 12px;
+}
+
+.publish-result-card {
+  text-align: center;
+}
+
+.published-url {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: #f7f9fc;
+  color: var(--ink);
+  font: 700 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.published-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
 
 .game-screen {
@@ -975,3 +1004,4 @@ button:disabled {
     transition-duration: .01ms !important;
   }
 }
+
