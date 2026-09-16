@@ -67,6 +67,27 @@ export async function fetchSharedStage(publicId) {
   return readResponse(response);
 }
 
+export async function fetchCommunityList(cursor = null) {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  return readResponse(await fetch(`/api/stages${query}`, { credentials: "same-origin" }));
+}
+
+export async function fetchCommunityRanking(kind) {
+  return readResponse(await fetch(`/api/rankings?kind=${encodeURIComponent(kind)}`, { credentials: "same-origin" }));
+}
+
+export async function beginSharedPlay(publicId) {
+  return readResponse(await fetch(`/api/stages/${encodeURIComponent(publicId)}/plays`, {
+    method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: "{}",
+  }));
+}
+
+export async function reportSharedClear(publicId, playId) {
+  return readResponse(await fetch(`/api/stages/${encodeURIComponent(publicId)}/clears`, {
+    method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ playId }),
+  }));
+}
+
 export async function copyShareUrl(url) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(url);
