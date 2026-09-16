@@ -1,3 +1,5 @@
+import { handleCommunity } from "./community.js";
+
 const MAX_REQUEST_BYTES = 16 * 1024;
 const MAX_PUBLISHES_PER_DAY = 5;
 const PUBLIC_ID_PATTERN = /^[A-Za-z0-9_-]{16}$/;
@@ -250,6 +252,8 @@ export async function onRequest(context) {
     ? context.params.path
     : String(context.params.path || "").split("/").filter(Boolean);
   try {
+    const community = await handleCommunity(context.request, context.env, path);
+    if (community) return community;
     if (path.length === 1 && path[0] === "stages") {
       if (context.request.method !== "POST") return error("Method Not Allowed", 405, { "Allow": "POST" });
       return await publish(context.request, context.env);

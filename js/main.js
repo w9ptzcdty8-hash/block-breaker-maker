@@ -1,5 +1,5 @@
 import { AudioManager } from "./audio.js";
-import { copyShareUrl, fetchSharedStage, getSharedStageId, publishStage } from "./community.js";
+import { beginSharedPlay, copyShareUrl, fetchCommunityList, fetchCommunityRanking, fetchSharedStage, getSharedStageId, publishStage, reportSharedClear } from "./community.js";
 import { BlockBreakerGame } from "./game.js";
 import { StageMaker } from "./maker.js";
 import { STAGES } from "./stages.js";
@@ -43,6 +43,11 @@ let currentMakerRecord = null;
 let draftClear = null;
 let makerTestFingerprint = "";
 let publishing = false;
+let sharedPlayAttempt = null;
+let communityKind = "current";
+let communityCursor = null;
+let communityLoading = false;
+let communityGeneration = 0;
 
 function formatTime(seconds) {
   const totalHundredths = Math.max(0, Math.floor(seconds * 100));
@@ -94,6 +99,11 @@ const game = new BlockBreakerGame(canvas, {
     if (state === "running") audio.startBgm();
     if (["waiting", "paused", "cleared", "gameover"].includes(state)) audio.stopBgm();
   },
+  onLaunch: () => {
+    if (!sharedStageActive || sharedPlayAttempt) return;
+    const publicId = currentStage.id.slice("shared-".length);
+    sharedPlayAttempt = beginSharedPlay(publicId).then((result) => result.playId).catch(() => null);
+  },
   onClear: (time) => {
     audio.stopBgm();
     audio.playClear();
@@ -129,6 +139,10 @@ const game = new BlockBreakerGame(canvas, {
     } else {
       const result = saveBestTime(currentStage.id, time);
       document.querySelector("#best-message").textContent = result.isBest ? "✨ ベストタイム更新！" : `BEST ${formatTime(result.best)}`;
+    }
+    if (sharedStageActive && sharedPlayAttempt) {
+      const publicId = currentStage.id.slice("shared-".length);
+      void sharedPlayAttempt.then((playId) => playId ? reportSharedClear(publicId, playId) : null).catch(() => {});
     }
     window.setTimeout(() => showScreen("screen-clear"), 350);
   },
@@ -353,6 +367,7 @@ function buildStageList() {
 }
 
 function startStage(stage, { makerTest = false, shared = false } = {}) {
+  sharedPlayAttempt = null;
   currentStage = stage;
   makerTestActive = makerTest;
   sharedStageActive = shared;
@@ -364,6 +379,63 @@ function startStage(stage, { makerTest = false, shared = false } = {}) {
     resizeGame();
     game.loadStage(stage);
   });
+}
+
+function renderCommunityStages(stages, append = false) {
+  const list = document.querySelector("#community-list");
+  if (!append) list.replaceChildren();
+  for (const stage of stages) {
+    const link = document.createElement("a");
+    link.className = "community-item";
+    link.href = `/s/${encodeURIComponent(stage.publicId)}`;
+    const title = document.createElement("strong");
+    title.textContent = stage.title;
+    const detail = document.createElement("span");
+    detail.textContent = `プレイ ${stage.uniquePlays}端末 · クリア ${stage.uniqueClears}端末 · クリア率 ${stage.clearRate === null ? "—" : `${stage.clearRate}%`}`;
+    link.append(title, detail);
+    list.append(link);
+  }
+}
+
+async function loadCommunity({ append = false } = {}) {
+  if (communityLoading) return;
+  communityLoading = true;
+  const generation = communityGeneration;
+  const kind = communityKind;
+  const status = document.querySelector("#community-status");
+  const more = document.querySelector("#btn-community-more");
+  more.disabled = true;
+  status.textContent = "読み込み中…";
+  try {
+    const result = kind === "current" ? await fetchCommunityList(append ? communityCursor : null) : await fetchCommunityRanking(kind);
+    if (generation !== communityGeneration) return;
+    renderCommunityStages(result.stages, append);
+    communityCursor = kind === "current" ? result.nextCursor : null;
+    more.classList.toggle("hidden", !communityCursor);
+    document.querySelector("#community-period").textContent = kind === "all-time" ? "これまでの投稿" : `${kind === "current" ? result.month : result.period}（日本時間）`;
+    status.textContent = result.stages.length ? "" : append ? "これ以上ありません" : "まだステージがありません";
+  } catch {
+    if (generation !== communityGeneration) return;
+    status.textContent = "一覧を読み込めませんでした。もう一度お試しください";
+    if (append) more.classList.remove("hidden");
+  } finally {
+    if (generation === communityGeneration) {
+      more.disabled = false;
+      communityLoading = false;
+    }
+  }
+}
+
+function openCommunity(kind = "current") {
+  communityGeneration += 1;
+  communityLoading = false;
+  communityKind = kind;
+  communityCursor = null;
+  document.querySelectorAll("[data-community-kind]").forEach((button) => button.classList.toggle("selected", button.dataset.communityKind === kind));
+  document.querySelector("#community-list").replaceChildren();
+  document.querySelector("#btn-community-more").classList.add("hidden");
+  showScreen("screen-community");
+  void loadCommunity();
 }
 
 function restartStage() {
@@ -408,6 +480,10 @@ document.querySelector("#btn-make").addEventListener("click", () => {
   audio.ensureContext();
   openMakerLibrary();
 });
+document.querySelector("#btn-community").addEventListener("click", () => openCommunity());
+document.querySelector("#btn-community-back").addEventListener("click", () => showScreen("screen-title"));
+document.querySelectorAll("[data-community-kind]").forEach((button) => button.addEventListener("click", () => openCommunity(button.dataset.communityKind)));
+document.querySelector("#btn-community-more").addEventListener("click", () => void loadCommunity({ append: true }));
 document.querySelector("#btn-stage-back").addEventListener("click", () => showScreen("screen-title"));
 document.querySelector("#btn-maker-library-back").addEventListener("click", () => showScreen("screen-title"));
 document.querySelector("#btn-maker-new").addEventListener("click", openNewMaker);

@@ -17,8 +17,28 @@
         <p class="tagline">こわして、クリアして、自分で作ろう！</p>
         <button id="btn-start" class="btn btn-primary btn-large" type="button">あそぶ</button>
         <button id="btn-make" class="btn btn-secondary" type="button">🧱 ステージをつくる</button>
+        <button id="btn-community" class="btn btn-secondary" type="button">🌟 みんなのステージ</button>
         <button id="btn-settings" class="btn btn-secondary" type="button">⚙️ サウンド設定</button>
         <a class="mrs-link" href="https://mrs-games.pages.dev/" target="_blank" rel="noopener">MRS GAMESへ</a>
+      </div>
+    </section>
+
+    <section id="screen-community" class="screen hidden">
+      <div class="panel community-panel">
+        <header class="panel-header">
+          <button id="btn-community-back" class="icon-button" type="button" aria-label="タイトルへ戻る">←</button>
+          <div><p class="eyebrow">COMMUNITY</p><h2>みんなのステージ</h2></div>
+        </header>
+        <div class="community-tabs" role="group" aria-label="表示する一覧">
+          <button type="button" data-community-kind="current" class="selected">当月の投稿</button>
+          <button type="button" data-community-kind="previous-month">前月TOP30</button>
+          <button type="button" data-community-kind="all-time">歴代BEST10</button>
+        </div>
+        <p id="community-period" class="maker-library-note"></p>
+        <p id="community-status" class="maker-library-status" aria-live="polite"></p>
+        <div id="community-list" class="community-list"></div>
+        <button id="btn-community-more" class="btn btn-secondary hidden" type="button">さらに見る</button>
+        <p class="community-privacy">ランキング集計のため、匿名のランダムな端末IDをCookieに1年間保存します。IPアドレスや作者名はCookieに保存しません。プレイ・クリアの件数は端末ごとに数えます。</p>
       </div>
     </section>
 

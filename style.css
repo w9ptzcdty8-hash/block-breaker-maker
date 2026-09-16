@@ -221,6 +221,16 @@ button:disabled {
   padding: 2px 2px 10px;
 }
 
+.community-panel { display: flex; flex-direction: column; }
+.community-tabs { display: flex; gap: 5px; }
+.community-tabs button { flex: 1; min-height: 44px; padding: 5px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); font-size: 11px; font-weight: 800; }
+.community-tabs button.selected { color: #fff; background: var(--secondary); }
+.community-list { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.community-item { display: block; width: 100%; margin: 7px 0; padding: 10px 12px; border: 2px solid var(--line); border-radius: 14px; background: #fff; color: var(--ink); text-align: left; text-decoration: none; }
+.community-item strong, .community-item span { display: block; }
+.community-item span { margin-top: 4px; color: var(--muted); font-size: 12px; }
+.community-privacy { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 10px 2px 0; }
+
 .stage-button {
   min-height: 76px;
   padding: 10px;

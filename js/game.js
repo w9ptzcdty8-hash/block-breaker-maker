@@ -208,6 +208,7 @@ export class BlockBreakerGame {
     ball.smashBoosted = this.smashActive;
     this.state = "running";
     this.callbacks.onStateChange?.(this.state);
+    this.callbacks.onLaunch?.();
     this.callbacks.onSound?.("launch");
     return true;
   }
@@ -1044,3 +1045,4 @@ export class BlockBreakerGame {
     ctx.fillText(ITEM_LABELS[item.type] || "ITEM", item.x, item.y + .5);
   }
 }
+
