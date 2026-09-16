@@ -62,10 +62,15 @@ async function limitRequest(request, env) {
   const minute = new Date().toISOString().slice(0, 16);
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const digest = await crypto.subtle.digest("SHA-256", encoder.encode(`${env.RATE_LIMIT_SALT}:community:${minute}:${ip}`));
+  const rateKey = base64url(new Uint8Array(digest));
+  const current = await env.STAGES_DB.prepare("SELECT request_count FROM community_rate_limits WHERE rate_key = ? AND window_minute = ?")
+    .bind(rateKey, minute).first();
+  // Rejected requests do not write again; the threshold is deliberately below the D1 daily write allowance.
+  if (Number(current?.request_count || 0) >= 30) return false;
   const row = await env.STAGES_DB.prepare(`INSERT INTO community_rate_limits(rate_key, window_minute, request_count) VALUES (?, ?, 1)
     ON CONFLICT(rate_key, window_minute) DO UPDATE SET request_count = request_count + 1 RETURNING request_count`)
-    .bind(base64url(new Uint8Array(digest)), minute).first();
-  return Number(row?.request_count || 0) <= 120;
+    .bind(rateKey, minute).first();
+  return Number(row?.request_count || 0) <= 30;
 }
 async function stageId(publicId, env) {
   if (!ID_PATTERN.test(publicId)) return null;
