@@ -1,4 +1,5 @@
 import { AudioManager } from "./audio.js";
+import { copyShareUrl, fetchSharedStage, getSharedStageId, publishStage } from "./community.js";
 import { BlockBreakerGame } from "./game.js";
 import { StageMaker } from "./maker.js";
 import { STAGES } from "./stages.js";
@@ -30,15 +31,18 @@ const stageNameElement = document.querySelector("#game-stage-name");
 const smashGauge = document.querySelector("#smash-gauge");
 const smashGaugeFill = document.querySelector("#smash-gauge-fill");
 const smashGaugeLabel = document.querySelector("#smash-gauge-label");
+const publishButton = document.querySelector("#btn-maker-publish");
 const settings = loadSettings();
 const audio = new AudioManager(settings);
 
 let currentStage = STAGES[0];
 let activePointer = null;
 let makerTestActive = false;
+let sharedStageActive = false;
 let currentMakerRecord = null;
 let draftClear = null;
 let makerTestFingerprint = "";
+let publishing = false;
 
 function formatTime(seconds) {
   const totalHundredths = Math.max(0, Math.floor(seconds * 100));
@@ -159,9 +163,10 @@ const maker = new StageMaker({
   },
 });
 
-function updateMakerTestNavigation(active) {
-  document.querySelectorAll(".maker-test-only").forEach((element) => element.classList.toggle("hidden", !active));
-  document.querySelectorAll(".preset-only").forEach((element) => element.classList.toggle("hidden", active));
+function updateGameNavigation({ makerTest = false, shared = false } = {}) {
+  document.querySelectorAll(".maker-test-only").forEach((element) => element.classList.toggle("hidden", !makerTest));
+  document.querySelectorAll(".shared-only").forEach((element) => element.classList.toggle("hidden", !shared));
+  document.querySelectorAll(".preset-only").forEach((element) => element.classList.toggle("hidden", makerTest || shared));
 }
 
 function prepareMakerScreen() {
@@ -169,19 +174,45 @@ function prepareMakerScreen() {
   game.stopLoop();
   pauseModal.classList.add("hidden");
   makerTestActive = false;
-  updateMakerTestNavigation(false);
+  sharedStageActive = false;
+  updateGameNavigation();
 }
 
 function updateMakerPublishStatus() {
   const stage = maker.getStage();
   const fingerprint = getMakerStageFingerprint(stage);
-  const ready = maker.hasBreakableBlock()
+  const ready = Boolean(maker.hasBreakableBlock()
+    && currentMakerRecord
     && draftClear?.fingerprint === fingerprint
-    && Number.isFinite(draftClear?.time);
+    && Number.isFinite(draftClear?.time));
+  publishButton.disabled = !ready || publishing;
   maker.setPublishStatus(
-    ready ? `投稿可能・CLEAR ${formatTime(draftClear.time)}` : "投稿不可",
+    publishing ? "投稿中" : ready ? `投稿可能・CLEAR ${formatTime(draftClear.time)}` : "投稿不可",
     ready,
   );
+}
+
+async function publishCurrentMakerStage() {
+  if (publishing || !currentMakerRecord || !isMakerStageCleared(currentMakerRecord)) return;
+  if (!window.confirm("このクリア済みステージを投稿しますか？\n投稿済みデータは後から変更されません。")) return;
+
+  publishing = true;
+  maker.setStatus("投稿しています…");
+  updateMakerPublishStatus();
+  try {
+    const result = await publishStage(currentMakerRecord.stage, currentMakerRecord.authorClearTime);
+    const shareUrl = new URL(result.url, window.location.origin).href;
+    document.querySelector("#published-stage-name").textContent = result.stage.title;
+    document.querySelector("#published-url").value = shareUrl;
+    document.querySelector("#link-play-published").href = shareUrl;
+    document.querySelector("#published-status").textContent = "";
+    showScreen("screen-published");
+  } catch (error) {
+    maker.setStatus(error instanceof Error ? error.message : "投稿に失敗しました", true);
+  } finally {
+    publishing = false;
+    updateMakerPublishStatus();
+  }
 }
 
 function saveCurrentMakerStage(stage) {
@@ -321,10 +352,11 @@ function buildStageList() {
   }));
 }
 
-function startStage(stage, { makerTest = false } = {}) {
+function startStage(stage, { makerTest = false, shared = false } = {}) {
   currentStage = stage;
   makerTestActive = makerTest;
-  updateMakerTestNavigation(makerTestActive);
+  sharedStageActive = shared;
+  updateGameNavigation({ makerTest, shared });
   stageNameElement.textContent = stage.title;
   pauseModal.classList.add("hidden");
   showScreen("screen-game");
@@ -335,7 +367,7 @@ function startStage(stage, { makerTest = false } = {}) {
 }
 
 function restartStage() {
-  startStage(currentStage, { makerTest: makerTestActive });
+  startStage(currentStage, { makerTest: makerTestActive, shared: sharedStageActive });
 }
 
 function returnToStages() {
@@ -343,9 +375,28 @@ function returnToStages() {
   game.stopLoop();
   pauseModal.classList.add("hidden");
   makerTestActive = false;
-  updateMakerTestNavigation(false);
+  sharedStageActive = false;
+  updateGameNavigation();
   buildStageList();
   showScreen("screen-stages");
+}
+
+function returnToTitle() {
+  window.location.assign("/");
+}
+
+async function openSharedStage(publicId) {
+  showScreen("screen-shared-loading");
+  try {
+    const result = await fetchSharedStage(publicId);
+    startStage(result.stage, { shared: true });
+  } catch (error) {
+    document.querySelector("#shared-loading-title").textContent = "ステージを開けませんでした";
+    document.querySelector("#shared-loading-message").textContent = error instanceof Error
+      ? error.message
+      : "時間をおいてもう一度お試しください";
+    document.querySelector("#btn-shared-title").classList.remove("hidden");
+  }
 }
 
 document.querySelector("#btn-start").addEventListener("click", () => {
@@ -361,6 +412,7 @@ document.querySelector("#btn-stage-back").addEventListener("click", () => showSc
 document.querySelector("#btn-maker-library-back").addEventListener("click", () => showScreen("screen-title"));
 document.querySelector("#btn-maker-new").addEventListener("click", openNewMaker);
 document.querySelector("#btn-maker-back").addEventListener("click", openMakerLibrary);
+publishButton.addEventListener("click", publishCurrentMakerStage);
 document.querySelector("#btn-clear-retry").addEventListener("click", restartStage);
 document.querySelector("#btn-clear-stages").addEventListener("click", returnToStages);
 document.querySelector("#btn-clear-make").addEventListener("click", openNewMaker);
@@ -368,6 +420,19 @@ document.querySelector("#btn-clear-editor").addEventListener("click", returnToMa
 document.querySelector("#btn-gameover-retry").addEventListener("click", restartStage);
 document.querySelector("#btn-gameover-stages").addEventListener("click", returnToStages);
 document.querySelector("#btn-gameover-editor").addEventListener("click", returnToMaker);
+document.querySelector("#btn-shared-title").addEventListener("click", returnToTitle);
+document.querySelectorAll('[data-action="shared-title"]').forEach((button) => button.addEventListener("click", returnToTitle));
+document.querySelector("#btn-published-editor").addEventListener("click", returnToMaker);
+document.querySelector("#btn-copy-published-url").addEventListener("click", async () => {
+  const status = document.querySelector("#published-status");
+  try {
+    await copyShareUrl(document.querySelector("#published-url").value);
+    status.textContent = "URLをコピーしました";
+  } catch {
+    status.textContent = "コピーできませんでした。URLを長押ししてコピーしてください";
+    status.classList.add("error");
+  }
+});
 
 document.querySelector("#btn-pause").addEventListener("click", () => {
   if (game.pause()) pauseModal.classList.remove("hidden");
@@ -475,4 +540,7 @@ function resizeGame() {
 const resizeObserver = new ResizeObserver(resizeGame);
 resizeObserver.observe(document.querySelector("#game-wrap"));
 
-showScreen("screen-title");
+const sharedStageId = getSharedStageId();
+if (sharedStageId) void openSharedStage(sharedStageId);
+else showScreen("screen-title");
+
