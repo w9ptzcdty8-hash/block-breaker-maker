@@ -395,7 +395,7 @@ function renderCommunityStages(stages, append = false) {
     preview.setAttribute("role", "img");
     preview.setAttribute("aria-label", `${stage.title}の配置プレビュー`);
 
-    const content = document.createElement("span");
+    const content = document.createElement("div");
     content.className = "community-item-content";
     const title = document.createElement("strong");
     title.textContent = stage.title;
