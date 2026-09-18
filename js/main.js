@@ -390,9 +390,17 @@ function renderCommunityStages(stages, append = false) {
     link.href = `/s/${encodeURIComponent(stage.publicId)}`;
     const title = document.createElement("strong");
     title.textContent = stage.title;
+    if (stage.viewerCleared === true) {
+      const badge = document.createElement("span");
+      badge.className = "community-clear-badge";
+      badge.textContent = "✓ クリア済み";
+      link.append(title, badge);
+    } else {
+      link.append(title);
+    }
     const detail = document.createElement("span");
     detail.textContent = `プレイ ${stage.uniquePlays}端末 · クリア ${stage.uniqueClears}端末 · クリア率 ${stage.clearRate === null ? "—" : `${stage.clearRate}%`}`;
-    link.append(title, detail);
+    link.append(detail);
     list.append(link);
   }
 }
@@ -619,4 +627,3 @@ resizeObserver.observe(document.querySelector("#game-wrap"));
 const sharedStageId = getSharedStageId();
 if (sharedStageId) void openSharedStage(sharedStageId);
 else showScreen("screen-title");
-

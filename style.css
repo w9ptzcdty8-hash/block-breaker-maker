@@ -229,6 +229,7 @@ button:disabled {
 .community-item { display: block; width: 100%; margin: 7px 0; padding: 10px 12px; border: 2px solid var(--line); border-radius: 14px; background: #fff; color: var(--ink); text-align: left; text-decoration: none; }
 .community-item strong, .community-item span { display: block; }
 .community-item span { margin-top: 4px; color: var(--muted); font-size: 12px; }
+.community-item .community-clear-badge { display: inline-block; padding: 3px 8px; border-radius: 999px; background: #e6f6e9; color: #17652a; font-size: 12px; font-weight: 800; }
 .community-privacy { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 10px 2px 0; }
 
 .stage-button {
@@ -1014,4 +1015,3 @@ button:disabled {
     transition-duration: .01ms !important;
   }
 }
-
