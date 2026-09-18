@@ -57,6 +57,12 @@ async function visitor(request, secretKey, create = false) {
   return { id, header: `${COOKIE_NAME}=${id}.${await sign(secretKey, `cookie:${id}`)}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax` };
 }
 async function visitorKey(secretKey, id) { return sign(secretKey, `visitor:${id}`); }
+async function currentVisitorKey(request, env) {
+  if (!request.headers.get("Cookie")?.includes(`${COOKIE_NAME}=`)) return null;
+  const secretKey = await key(env);
+  const device = await visitor(request, secretKey);
+  return device ? visitorKey(secretKey, device.id) : null;
+}
 async function limitRequest(request, env) {
   if (!env.RATE_LIMIT_SALT) throw new Error("RATE_LIMIT_SALT required");
   const minute = new Date().toISOString().slice(0, 16);
@@ -172,7 +178,8 @@ function stageSummary(row) {
   const clears = Number(row.unique_clears || 0);
   return { publicId: row.public_id, title: `みんなのステージ ${String(row.id).padStart(6, "0")}`,
     createdAt: row.created_at, uniquePlays: plays, uniqueClears: clears,
-    clearRate: plays ? Math.round(clears / plays * 1000) / 10 : null };
+    clearRate: plays ? Math.round(clears / plays * 1000) / 10 : null,
+    viewerCleared: row.viewer_cleared === 1 };
 }
 async function list(request, env) {
   const url = new URL(request.url);
@@ -181,12 +188,15 @@ async function list(request, env) {
   const cursor = parseCursor(url.searchParams.get("cursor"), month);
   if (cursor === false) return fail("カーソルを確認してください", 400);
   const [begin, end] = monthBounds(month);
+  const viewerKey = await currentVisitorKey(request, env);
   const where = cursor ? "AND (p.created_at < ? OR (p.created_at = ? AND p.id <= ?)) AND (p.created_at < ? OR (p.created_at = ? AND p.id < ?))" : "";
   const args = cursor ? [cursor.anchor.at, cursor.anchor.at, cursor.anchor.id, cursor.last.at, cursor.last.at, cursor.last.id] : [];
-  const result = await env.STAGES_DB.prepare(`SELECT p.id, p.public_id, p.created_at, s.unique_plays, s.unique_clears
+  const result = await env.STAGES_DB.prepare(`SELECT p.id, p.public_id, p.created_at, s.unique_plays, s.unique_clears,
+      (v.first_clear_at IS NOT NULL) AS viewer_cleared
     FROM published_stages p LEFT JOIN stage_stats s ON s.stage_id = p.id
+    LEFT JOIN stage_visitors v ON v.stage_id = p.id AND v.visitor_key = ?
     WHERE p.status = 'active' AND p.created_at >= ? AND p.created_at < ? ${where}
-    ORDER BY p.created_at DESC, p.id DESC LIMIT 21`).bind(begin, end, ...args).all();
+    ORDER BY p.created_at DESC, p.id DESC LIMIT 21`).bind(viewerKey, begin, end, ...args).all();
   const rows = result.results || [];
   const shown = rows.slice(0, 20);
   const anchor = cursor?.anchor || (shown.length ? tuple(shown[0]) : null);
@@ -197,21 +207,26 @@ async function ranking(request, env) {
   const url = new URL(request.url);
   const kind = url.searchParams.get("kind");
   if ((kind !== "previous-month" && kind !== "all-time") || [...url.searchParams.keys()].some((name) => name !== "kind")) return fail("ランキング種別を確認してください", 400);
+  const viewerKey = await currentVisitorKey(request, env);
   let result, label;
   if (kind === "previous-month") {
     label = previousMonth(monthKey());
     const [begin, end] = monthBounds(label);
-    result = await env.STAGES_DB.prepare(`SELECT p.id, p.public_id, p.created_at, s.unique_plays, s.unique_clears
+    result = await env.STAGES_DB.prepare(`SELECT p.id, p.public_id, p.created_at, s.unique_plays, s.unique_clears,
+        (v.first_clear_at IS NOT NULL) AS viewer_cleared
       FROM published_stages p LEFT JOIN stage_month_stats s ON s.stage_id = p.id AND s.month_key = ?
+      LEFT JOIN stage_visitors v ON v.stage_id = p.id AND v.visitor_key = ?
       WHERE p.status = 'active' AND p.created_at >= ? AND p.created_at < ?
       ORDER BY COALESCE(s.unique_plays,0) DESC, COALESCE(s.unique_clears,0) DESC, p.created_at ASC, p.id ASC LIMIT 30`)
-      .bind(label, begin, end).all();
+      .bind(label, viewerKey, begin, end).all();
   } else {
     label = "all-time";
-    result = await env.STAGES_DB.prepare(`SELECT p.id, p.public_id, p.created_at, s.unique_plays, s.unique_clears
+    result = await env.STAGES_DB.prepare(`SELECT p.id, p.public_id, p.created_at, s.unique_plays, s.unique_clears,
+        (v.first_clear_at IS NOT NULL) AS viewer_cleared
       FROM published_stages p LEFT JOIN stage_stats s ON s.stage_id = p.id
+      LEFT JOIN stage_visitors v ON v.stage_id = p.id AND v.visitor_key = ?
       WHERE p.status = 'active'
-      ORDER BY COALESCE(s.unique_plays,0) DESC, COALESCE(s.unique_clears,0) DESC, p.created_at ASC, p.id ASC LIMIT 10`).all();
+      ORDER BY COALESCE(s.unique_plays,0) DESC, COALESCE(s.unique_clears,0) DESC, p.created_at ASC, p.id ASC LIMIT 10`).bind(viewerKey).all();
   }
   return reply({ period: label, stages: (result.results || []).map(stageSummary) });
 }
@@ -229,4 +244,3 @@ export async function handleCommunity(request, env, path) {
     return fail("集計サービスを利用できません", 503, { "Retry-After": "60" });
   }
 }
-
