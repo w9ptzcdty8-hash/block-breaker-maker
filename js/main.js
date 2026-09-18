@@ -3,6 +3,7 @@ import { beginSharedPlay, copyShareUrl, fetchCommunityList, fetchCommunityRankin
 import { BlockBreakerGame } from "./game.js";
 import { StageMaker } from "./maker.js";
 import { STAGES } from "./stages.js";
+import { drawStagePreview } from "./stage-preview.js";
 import {
   deleteMakerStage,
   getBestTime,
@@ -388,20 +389,29 @@ function renderCommunityStages(stages, append = false) {
     const link = document.createElement("a");
     link.className = "community-item";
     link.href = `/s/${encodeURIComponent(stage.publicId)}`;
+
+    const preview = document.createElement("canvas");
+    preview.className = "community-stage-preview";
+    preview.setAttribute("role", "img");
+    preview.setAttribute("aria-label", `${stage.title}の配置プレビュー`);
+
+    const content = document.createElement("span");
+    content.className = "community-item-content";
     const title = document.createElement("strong");
     title.textContent = stage.title;
+    content.append(title);
     if (stage.viewerCleared === true) {
       const badge = document.createElement("span");
       badge.className = "community-clear-badge";
       badge.textContent = "✓ クリア済み";
-      link.append(title, badge);
-    } else {
-      link.append(title);
+      content.append(badge);
     }
     const detail = document.createElement("span");
     detail.textContent = `プレイ ${stage.uniquePlays}端末 · クリア ${stage.uniqueClears}端末 · クリア率 ${stage.clearRate === null ? "—" : `${stage.clearRate}%`}`;
-    link.append(detail);
+    content.append(detail);
+    link.append(preview, content);
     list.append(link);
+    drawStagePreview(preview, stage.preview);
   }
 }
 
