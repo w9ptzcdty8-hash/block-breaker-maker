@@ -35,11 +35,14 @@ test("community lists mark only clears recorded for the signed visitor cookie", 
               async all() {
                 queries.push({ sql, params });
                 assert.match(sql, /LEFT JOIN stage_visitors v ON v\.stage_id = p\.id AND v\.visitor_key = \?/);
+                assert.match(sql, /JOIN stage_bodies b ON b\.content_hash = p\.body_hash/);
                 assert.match(sql, /p\.status = 'active'/);
                 const cleared = params.includes(visitorKey) ? 1 : 0;
                 return { results: [
-                  { id: 1, public_id: "AAAAAAAAAAAAAAAA", created_at: "2026-09-01 00:00:00", unique_plays: 2, unique_clears: 1, viewer_cleared: cleared },
-                  { id: 2, public_id: "BBBBBBBBBBBBBBBB", created_at: "2026-09-01 00:00:00", unique_plays: 1, unique_clears: 0, viewer_cleared: 0 },
+                  { id: 1, public_id: "AAAAAAAAAAAAAAAA", created_at: "2026-09-01 00:00:00", unique_plays: 2, unique_clears: 1, viewer_cleared: cleared,
+                    blocks_json: JSON.stringify([{ x: 0, y: 0, type: "normal" }, { x: 1, y: 1, type: "explosive" }, { x: 2, y: 2, type: "item", item: "life" }]) },
+                  { id: 2, public_id: "BBBBBBBBBBBBBBBB", created_at: "2026-09-01 00:00:00", unique_plays: 1, unique_clears: 0, viewer_cleared: 0,
+                    blocks_json: JSON.stringify([{ x: 9, y: 11, type: "solid" }]) },
                 ] };
               },
             };
@@ -59,6 +62,11 @@ test("community lists mark only clears recorded for the signed visitor cookie", 
     assert.equal(response.headers.get("Cache-Control"), "no-store");
     const { stages } = await response.json();
     assert.deepEqual(stages.map((stage) => stage.viewerCleared), [true, false]);
+    assert.equal(stages[0].preview.length, 120);
+    assert.equal(stages[0].preview[0], "n");
+    assert.equal(stages[0].preview[11], "e");
+    assert.equal(stages[0].preview[22], "u");
+    assert.equal(stages[1].preview[119], "s");
   }
   assert.equal(queries.length, 3);
 

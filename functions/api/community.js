@@ -173,13 +173,47 @@ function parseCursor(raw, month) {
   } catch { /* malformed cursor */ }
   return false;
 }
+const PREVIEW_BLOCK_CODES = Object.freeze({
+  normal: "n",
+  hit2: "2",
+  hit3: "3",
+  solid: "s",
+  explosive: "e",
+});
+const PREVIEW_ITEM_CODES = Object.freeze({
+  random: "r",
+  paddle: "p",
+  multiball: "m",
+  largeBall: "l",
+  explosiveBall: "b",
+  life: "u",
+});
+function stagePreview(blocksJson) {
+  try {
+    const blocks = JSON.parse(blocksJson);
+    if (!Array.isArray(blocks)) return null;
+    const cells = Array(120).fill(".");
+    for (const block of blocks) {
+      if (!Number.isInteger(block?.x) || block.x < 0 || block.x >= 10
+        || !Number.isInteger(block?.y) || block.y < 0 || block.y >= 12) return null;
+      const code = block.type === "item" ? PREVIEW_ITEM_CODES[block.item] : PREVIEW_BLOCK_CODES[block.type];
+      const index = block.y * 10 + block.x;
+      if (!code || cells[index] !== ".") return null;
+      cells[index] = code;
+    }
+    return cells.join("");
+  } catch {
+    return null;
+  }
+}
 function stageSummary(row) {
   const plays = Number(row.unique_plays || 0);
   const clears = Number(row.unique_clears || 0);
   return { publicId: row.public_id, title: `みんなのステージ ${String(row.id).padStart(6, "0")}`,
     createdAt: row.created_at, uniquePlays: plays, uniqueClears: clears,
     clearRate: plays ? Math.round(clears / plays * 1000) / 10 : null,
-    viewerCleared: row.viewer_cleared === 1 };
+    viewerCleared: row.viewer_cleared === 1,
+    preview: stagePreview(row.blocks_json) };
 }
 async function list(request, env) {
   const url = new URL(request.url);
@@ -191,9 +225,10 @@ async function list(request, env) {
   const viewerKey = await currentVisitorKey(request, env);
   const where = cursor ? "AND (p.created_at < ? OR (p.created_at = ? AND p.id <= ?)) AND (p.created_at < ? OR (p.created_at = ? AND p.id < ?))" : "";
   const args = cursor ? [cursor.anchor.at, cursor.anchor.at, cursor.anchor.id, cursor.last.at, cursor.last.at, cursor.last.id] : [];
-  const result = await env.STAGES_DB.prepare(`SELECT p.id, p.public_id, p.created_at, s.unique_plays, s.unique_clears,
+  const result = await env.STAGES_DB.prepare(`SELECT p.id, p.public_id, p.created_at, s.unique_plays, s.unique_clears, b.blocks_json,
       (v.first_clear_at IS NOT NULL) AS viewer_cleared
     FROM published_stages p LEFT JOIN stage_stats s ON s.stage_id = p.id
+    JOIN stage_bodies b ON b.content_hash = p.body_hash
     LEFT JOIN stage_visitors v ON v.stage_id = p.id AND v.visitor_key = ?
     WHERE p.status = 'active' AND p.created_at >= ? AND p.created_at < ? ${where}
     ORDER BY p.created_at DESC, p.id DESC LIMIT 21`).bind(viewerKey, begin, end, ...args).all();
@@ -212,18 +247,20 @@ async function ranking(request, env) {
   if (kind === "previous-month") {
     label = previousMonth(monthKey());
     const [begin, end] = monthBounds(label);
-    result = await env.STAGES_DB.prepare(`SELECT p.id, p.public_id, p.created_at, s.unique_plays, s.unique_clears,
+    result = await env.STAGES_DB.prepare(`SELECT p.id, p.public_id, p.created_at, s.unique_plays, s.unique_clears, b.blocks_json,
         (v.first_clear_at IS NOT NULL) AS viewer_cleared
       FROM published_stages p LEFT JOIN stage_month_stats s ON s.stage_id = p.id AND s.month_key = ?
+      JOIN stage_bodies b ON b.content_hash = p.body_hash
       LEFT JOIN stage_visitors v ON v.stage_id = p.id AND v.visitor_key = ?
       WHERE p.status = 'active' AND p.created_at >= ? AND p.created_at < ?
       ORDER BY COALESCE(s.unique_plays,0) DESC, COALESCE(s.unique_clears,0) DESC, p.created_at ASC, p.id ASC LIMIT 30`)
       .bind(label, viewerKey, begin, end).all();
   } else {
     label = "all-time";
-    result = await env.STAGES_DB.prepare(`SELECT p.id, p.public_id, p.created_at, s.unique_plays, s.unique_clears,
+    result = await env.STAGES_DB.prepare(`SELECT p.id, p.public_id, p.created_at, s.unique_plays, s.unique_clears, b.blocks_json,
         (v.first_clear_at IS NOT NULL) AS viewer_cleared
       FROM published_stages p LEFT JOIN stage_stats s ON s.stage_id = p.id
+      JOIN stage_bodies b ON b.content_hash = p.body_hash
       LEFT JOIN stage_visitors v ON v.stage_id = p.id AND v.visitor_key = ?
       WHERE p.status = 'active'
       ORDER BY COALESCE(s.unique_plays,0) DESC, COALESCE(s.unique_clears,0) DESC, p.created_at ASC, p.id ASC LIMIT 10`).bind(viewerKey).all();
