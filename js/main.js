@@ -1,5 +1,5 @@
 import { AudioManager } from "./audio.js";
-import { beginSharedPlay, copyShareUrl, fetchCommunityList, fetchCommunityRanking, fetchSharedStage, getSharedStageId, publishStage, reportSharedClear } from "./community.js";
+import { beginSharedPlay, copyShareUrl, fetchCommunityList, fetchCommunityRanking, fetchSharedStage, getSharedStageId, publishStage, reportSharedClear, shareStage } from "./community.js";
 import { BlockBreakerGame } from "./game.js";
 import { StageMaker } from "./maker.js";
 import { STAGES } from "./stages.js";
@@ -110,6 +110,9 @@ const game = new BlockBreakerGame(canvas, {
     audio.playClear();
     document.querySelector("#clear-stage-name").textContent = currentStage.title;
     document.querySelector("#clear-time").textContent = formatTime(time);
+    const clearShareStatus = document.querySelector("#clear-share-status");
+    clearShareStatus.textContent = "";
+    clearShareStatus.classList.remove("error");
     if (makerTestActive) {
       draftClear = {
         fingerprint: makerTestFingerprint || getMakerStageFingerprint(currentStage),
@@ -227,6 +230,26 @@ async function publishCurrentMakerStage() {
   } finally {
     publishing = false;
     updateMakerPublishStatus();
+  }
+}
+
+async function shareFromButton(button, status, { text, url }) {
+  if (button.disabled) return;
+  button.disabled = true;
+  status.textContent = "";
+  status.classList.remove("error");
+  try {
+    const result = await shareStage({
+      title: "ブロック崩しメーカー",
+      text,
+      url,
+    });
+    if (result === "copied") status.textContent = "URLをコピーしました";
+  } catch {
+    status.textContent = "共有できませんでした。URLを長押ししてコピーしてください";
+    status.classList.add("error");
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -511,12 +534,33 @@ document.querySelector("#btn-clear-retry").addEventListener("click", restartStag
 document.querySelector("#btn-clear-stages").addEventListener("click", returnToStages);
 document.querySelector("#btn-clear-make").addEventListener("click", openNewMaker);
 document.querySelector("#btn-clear-editor").addEventListener("click", returnToMaker);
+document.querySelector("#btn-clear-share").addEventListener("click", () => {
+  if (!sharedStageActive || !currentStage.id.startsWith("shared-")) return;
+  const publicId = currentStage.id.slice("shared-".length);
+  const url = new URL(`/s/${encodeURIComponent(publicId)}`, window.location.origin).href;
+  void shareFromButton(
+    document.querySelector("#btn-clear-share"),
+    document.querySelector("#clear-share-status"),
+    { text: `「${currentStage.title}」をクリア！挑戦してみて！`, url },
+  );
+});
 document.querySelector("#btn-gameover-retry").addEventListener("click", restartStage);
 document.querySelector("#btn-gameover-stages").addEventListener("click", returnToStages);
 document.querySelector("#btn-gameover-editor").addEventListener("click", returnToMaker);
 document.querySelector("#btn-shared-title").addEventListener("click", returnToTitle);
 document.querySelectorAll('[data-action="shared-title"]').forEach((button) => button.addEventListener("click", returnToTitle));
 document.querySelector("#btn-published-editor").addEventListener("click", returnToMaker);
+document.querySelector("#btn-share-published").addEventListener("click", () => {
+  const stageTitle = document.querySelector("#published-stage-name").textContent;
+  void shareFromButton(
+    document.querySelector("#btn-share-published"),
+    document.querySelector("#published-status"),
+    {
+      text: `「${stageTitle}」を作ったよ！遊んでみて！`,
+      url: document.querySelector("#published-url").value,
+    },
+  );
+});
 document.querySelector("#btn-copy-published-url").addEventListener("click", async () => {
   const status = document.querySelector("#published-status");
   try {
