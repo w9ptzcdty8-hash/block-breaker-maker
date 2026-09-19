@@ -223,7 +223,9 @@ async function publishCurrentMakerStage() {
     document.querySelector("#published-stage-name").textContent = result.stage.title;
     document.querySelector("#published-url").value = shareUrl;
     document.querySelector("#link-play-published").href = shareUrl;
-    document.querySelector("#published-status").textContent = "";
+    const publishedStatus = document.querySelector("#published-status");
+    publishedStatus.textContent = "";
+    publishedStatus.classList.remove("error");
     showScreen("screen-published");
   } catch (error) {
     maker.setStatus(error instanceof Error ? error.message : "投稿に失敗しました", true);
@@ -246,7 +248,7 @@ async function shareFromButton(button, status, { text, url }) {
     });
     if (result === "copied") status.textContent = "URLをコピーしました";
   } catch {
-    status.textContent = "共有できませんでした。URLを長押ししてコピーしてください";
+    status.textContent = "共有できませんでした。ブラウザのアドレスをコピーしてください";
     status.classList.add("error");
   } finally {
     button.disabled = false;
@@ -563,6 +565,7 @@ document.querySelector("#btn-share-published").addEventListener("click", () => {
 });
 document.querySelector("#btn-copy-published-url").addEventListener("click", async () => {
   const status = document.querySelector("#published-status");
+  status.classList.remove("error");
   try {
     await copyShareUrl(document.querySelector("#published-url").value);
     status.textContent = "URLをコピーしました";
