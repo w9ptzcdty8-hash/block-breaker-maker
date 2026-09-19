@@ -106,3 +106,23 @@ export async function copyShareUrl(url) {
   if (!copied) throw new Error("copy failed");
 }
 
+export async function shareStage({ title, text, url }) {
+  const shareData = { title, text, url };
+  const browserNavigator = typeof navigator === "undefined" ? null : navigator;
+  const canUseShare = typeof browserNavigator?.share === "function"
+    && (typeof browserNavigator.canShare !== "function" || browserNavigator.canShare(shareData));
+  if (canUseShare) {
+    try {
+      await browserNavigator.share(shareData);
+      return "shared";
+    } catch (error) {
+      if (error?.name === "AbortError") return "cancelled";
+    }
+  }
+  await copyShareUrl(url);
+  return "copied";
+}
+
+export function buildClearedStageShareText(stageTitle, clearTime) {
+  return `「${stageTitle}」を${clearTime}でクリア！挑戦してみて！`;
+}
