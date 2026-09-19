@@ -122,3 +122,7 @@ export async function shareStage({ title, text, url }) {
   await copyShareUrl(url);
   return "copied";
 }
+
+export function buildClearedStageShareText(stageTitle, clearTime) {
+  return `「${stageTitle}」を${clearTime}でクリア！挑戦してみて！`;
+}
