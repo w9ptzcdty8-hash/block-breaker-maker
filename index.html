@@ -153,6 +153,8 @@
         <h2 id="clear-stage-name">STAGE 01</h2>
         <p id="clear-time" class="result-time">00:00.00</p>
         <p id="best-message" class="best-message"></p>
+        <button id="btn-clear-share" class="btn btn-secondary shared-only hidden" type="button">📤 このステージを共有</button>
+        <p id="clear-share-status" class="maker-status shared-only hidden" aria-live="polite"></p>
         <button id="btn-clear-retry" class="btn btn-primary" type="button">もう一度遊ぶ</button>
         <button id="btn-clear-stages" class="btn btn-secondary preset-only" type="button">他のステージ</button>
         <button id="btn-clear-make" class="btn btn-secondary preset-only" type="button">自分で作る</button>
@@ -168,7 +170,8 @@
         <h2 id="published-stage-name">みんなのステージ</h2>
         <p class="best-message">このURLから他のユーザーが直接遊べます</p>
         <input id="published-url" class="published-url" type="text" readonly aria-label="共有URL">
-        <button id="btn-copy-published-url" class="btn btn-primary" type="button">URLをコピー</button>
+        <button id="btn-share-published" class="btn btn-primary" type="button">📤 共有する</button>
+        <button id="btn-copy-published-url" class="btn btn-secondary" type="button">URLをコピー</button>
         <a id="link-play-published" class="btn btn-secondary published-link" href="/">投稿したステージを開く</a>
         <button id="btn-published-editor" class="btn btn-secondary" type="button">編集へ戻る</button>
         <p id="published-status" class="maker-status" aria-live="polite"></p>
