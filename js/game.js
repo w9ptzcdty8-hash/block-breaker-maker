@@ -31,6 +31,8 @@ const BLOCK_FLASH_DURATION = 0.18;
 const SMASH_MAX_CHARGE = 20;
 const SMASH_DURATION = 10;
 const SMASH_SPEED_MULTIPLIER = 1.2;
+const WARP_COOLDOWN = 3;
+const WARP_ROTATION_SPEED = (Math.PI * 2) / 30;
 
 const EFFECT_DURATIONS = Object.freeze({
   paddle: 12,
@@ -53,6 +55,7 @@ const BLOCK_HP = Object.freeze({
   [BLOCK_TYPES.SOLID]: Infinity,
   [BLOCK_TYPES.EXPLOSIVE]: 1,
   [BLOCK_TYPES.ITEM]: 1,
+  [BLOCK_TYPES.WARP]: Infinity,
 });
 
 const BLOCK_IMAGE_URLS = Object.freeze({
@@ -61,6 +64,7 @@ const BLOCK_IMAGE_URLS = Object.freeze({
   hit3: new URL("../assets/images/block-3hit.png", import.meta.url).href,
   solid: new URL("../assets/images/block-unbreakable.png", import.meta.url).href,
   explosive: new URL("../assets/images/block-bomb.png", import.meta.url).href,
+  warp: new URL("../assets/images/block-warp.png", import.meta.url).href,
 });
 
 const ITEM_IMAGE_URLS = Object.freeze({
@@ -77,6 +81,8 @@ const BLOCK_IMAGE_CROP = Object.freeze({
   width: 238 / 256,
   height: 103 / 128,
 });
+
+const WARP_IMAGE_CROP = Object.freeze({ x: 64 / 256, y: 0, width: 128 / 256, height: 1 });
 
 export class BlockBreakerGame {
   constructor(canvas, callbacks = {}) {
@@ -105,6 +111,7 @@ export class BlockBreakerGame {
     this.smashRemaining = 0;
     this.smashFlash = 0;
     this.lastSmashSignature = "";
+    this.warpRotation = 0;
     this.blockImages = this.createBlockImages();
     this.itemImages = this.createItemImages();
     this.paddle = { x: (BOARD_WIDTH - NORMAL_PADDLE_WIDTH) / 2, y: PADDLE_Y, width: NORMAL_PADDLE_WIDTH, height: 12 };
@@ -157,6 +164,7 @@ export class BlockBreakerGame {
     this.explosionEffects = [];
     this.debris = [];
     this.nextChainExplosionAt = 0;
+    this.warpRotation = 0;
     this.resetSmash();
     this.resetRound(true);
     this.state = "waiting";
@@ -212,6 +220,9 @@ export class BlockBreakerGame {
 
     if (this.state === "running" || this.state === "cleared") {
       this.updateVisualEffects(frameTime);
+    }
+    if (this.state !== "paused") {
+      this.warpRotation = (this.warpRotation + frameTime * WARP_ROTATION_SPEED) % (Math.PI * 2);
     }
 
     this.draw();
@@ -269,6 +280,7 @@ export class BlockBreakerGame {
       smashBoosted: false,
       smashContacts: new Set(),
       trail: [],
+      warpCooldown: 0,
     }];
     if (this.smashActive) this.boostBallForSmash(this.balls[0]);
   }
@@ -384,6 +396,7 @@ export class BlockBreakerGame {
   }
 
   updateBall(ball, dt) {
+    ball.warpCooldown = Math.max(0, (ball.warpCooldown || 0) - dt);
     if (this.smashActive) {
       ball.trail ??= [];
       ball.trail.push({ x: ball.x, y: ball.y, radius: ball.radius });
@@ -421,6 +434,8 @@ export class BlockBreakerGame {
       }
     }
 
+    if (this.tryWarpBall(ball)) return;
+
     if (this.smashActive) {
       this.resolveSmashCollisions(ball);
       return;
@@ -430,6 +445,7 @@ export class BlockBreakerGame {
     let collisionInfo = null;
     for (const target of this.blocks) {
       if (!target.active) continue;
+      if (target.type === BLOCK_TYPES.WARP) continue;
       const collision = circleRectCollision(ball, target);
       if (collision && (!collisionInfo || collision.penetration > collisionInfo.penetration)) {
         collisionTarget = target;
@@ -451,6 +467,7 @@ export class BlockBreakerGame {
 
     for (const target of this.blocks) {
       if (!target.active) continue;
+      if (target.type === BLOCK_TYPES.WARP) continue;
       const collision = circleRectCollision(ball, target);
       if (!collision) continue;
 
@@ -475,6 +492,7 @@ export class BlockBreakerGame {
 
   hitBlock(target, attack = "direct") {
     const explosiveBall = attack === "explosiveBall" || attack === "smash";
+    if (target.type === BLOCK_TYPES.WARP) return;
     if (target.type === BLOCK_TYPES.SOLID) {
       if (explosiveBall) {
         this.scheduleBlast(target.gridX, target.gridY, attack === "smash" ? "smashBall" : "ball", 0);
@@ -544,7 +562,7 @@ export class BlockBreakerGame {
       for (let x = gridX - 1; x <= gridX + 1; x += 1) {
         if (x === gridX && y === gridY) continue;
         const neighbor = this.blockMap.get(`${x},${y}`);
-        if (neighbor?.active && neighbor.type !== BLOCK_TYPES.SOLID) {
+        if (neighbor?.active && ![BLOCK_TYPES.SOLID, BLOCK_TYPES.WARP].includes(neighbor.type)) {
           this.damageBlock(neighbor, 1, source);
         }
       }
@@ -552,7 +570,7 @@ export class BlockBreakerGame {
   }
 
   damageBlock(target, damage, source = "direct") {
-    if (!target.active || target.type === BLOCK_TYPES.SOLID) return false;
+    if (!target.active || [BLOCK_TYPES.SOLID, BLOCK_TYPES.WARP].includes(target.type)) return false;
     if (source === "explosion" || source === "explosiveBall" || source === "smash") {
       target.blastFlash = BLOCK_FLASH_DURATION;
     }
@@ -574,7 +592,9 @@ export class BlockBreakerGame {
 
   checkForStageClear() {
     if (this.state !== "running") return;
-    const hasBreakableBlock = this.blocks.some((entry) => entry.active && entry.type !== BLOCK_TYPES.SOLID);
+    const hasBreakableBlock = this.blocks.some((entry) => (
+      entry.active && ![BLOCK_TYPES.SOLID, BLOCK_TYPES.WARP].includes(entry.type)
+    ));
     if (!hasBreakableBlock && this.pendingExplosions.length === 0) this.finishStage();
   }
 
@@ -721,7 +741,30 @@ export class BlockBreakerGame {
       smashBoosted: this.smashActive,
       smashContacts: new Set(),
       trail: [],
+      warpCooldown: 0,
     });
+  }
+
+  tryWarpBall(ball) {
+    if ((ball.warpCooldown || 0) > 0) return false;
+    const warps = this.blocks.filter((entry) => entry.active && entry.type === BLOCK_TYPES.WARP);
+    if (warps.length !== 2) return false;
+
+    const source = warps.find((entry) => circleRectCollision(ball, entry));
+    if (!source) return false;
+    const destination = warps.find((entry) => entry !== source);
+    const speed = Math.hypot(ball.vx, ball.vy);
+    if (speed <= 0) return false;
+
+    const directionX = ball.vx / speed;
+    const directionY = ball.vy / speed;
+    const exitDistance = Math.max(destination.width, destination.height) / 2 + ball.radius + 2;
+    ball.x = destination.x + destination.width / 2 + directionX * exitDistance;
+    ball.y = destination.y + destination.height / 2 + directionY * exitDistance;
+    ball.warpCooldown = WARP_COOLDOWN;
+    ball.smashContacts = new Set();
+    ball.trail = [];
+    return true;
   }
 
   updateEffects() {
@@ -831,6 +874,10 @@ export class BlockBreakerGame {
 
   drawBlock(entry) {
     const ctx = this.ctx;
+    if (entry.type === BLOCK_TYPES.WARP) {
+      this.drawWarpBlock(entry);
+      return;
+    }
     const palettes = {
       [BLOCK_TYPES.NORMAL]: ["#58a6ff", "#2266c2"],
       [BLOCK_TYPES.HIT_2]: ["#ffb84d", "#e47718"],
@@ -933,6 +980,51 @@ export class BlockBreakerGame {
     } else {
       ctx.fillStyle = "rgba(255,255,255,.42)";
       ctx.fillRect(5, 4, entry.width - 10, 2);
+    }
+    ctx.restore();
+  }
+
+  drawWarpBlock(entry) {
+    const ctx = this.ctx;
+    const image = this.getBlockImage(entry);
+    const size = Math.min(entry.width, entry.height);
+    ctx.save();
+    ctx.translate(entry.x + entry.width / 2, entry.y + entry.height / 2);
+    ctx.rotate(this.warpRotation);
+
+    if (image) {
+      ctx.drawImage(
+        image,
+        image.naturalWidth * WARP_IMAGE_CROP.x,
+        image.naturalHeight * WARP_IMAGE_CROP.y,
+        image.naturalWidth * WARP_IMAGE_CROP.width,
+        image.naturalHeight * WARP_IMAGE_CROP.height,
+        -size / 2,
+        -size / 2,
+        size,
+        size,
+      );
+    } else {
+      const gradient = ctx.createRadialGradient(0, 0, 1, 0, 0, size / 2);
+      gradient.addColorStop(0, "#ffffff");
+      gradient.addColorStop(0.24, "#151520");
+      gradient.addColorStop(0.62, "#7d35dc");
+      gradient.addColorStop(1, "rgba(63, 24, 128, 0)");
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(15, 8, 25, .9)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let angle = 0; angle <= Math.PI * 4; angle += 0.16) {
+        const radius = angle / (Math.PI * 4) * size * 0.44;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        if (angle === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -1040,6 +1132,8 @@ export class BlockBreakerGame {
         ctx.fill();
       });
     }
+    ctx.save();
+    ctx.globalAlpha = this.getWarpBlinkOpacity(ball);
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
     ctx.fillStyle = this.smashActive ? "#fff7ad" : this.isEffectActive("explosiveBall") ? "#ff754f" : "#ffffff";
@@ -1047,6 +1141,12 @@ export class BlockBreakerGame {
     ctx.shadowBlur = this.smashActive ? 18 : this.isEffectActive("explosiveBall") ? 13 : 8;
     ctx.fill();
     ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  getWarpBlinkOpacity(ball) {
+    if ((ball.warpCooldown || 0) <= 0) return 1;
+    return Math.floor(ball.warpCooldown * 8) % 2 === 0 ? 0.25 : 1;
   }
 
   drawItem(item) {
