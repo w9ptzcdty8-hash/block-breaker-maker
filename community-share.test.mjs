@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { shareStage } from "./js/community.js";
+import { buildClearedStageShareText, shareStage } from "./js/community.js";
 
 const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
 
@@ -61,4 +61,11 @@ test("shareStage falls back to URL copy after a share error", async () => {
   const url = "https://example.com/s/CCCCCCCCCCCCCCCC";
   assert.equal(await shareStage({ title: "title", text: "text", url }), "copied");
   assert.equal(copied, url);
+});
+
+test("cleared-stage share text includes the displayed clear time", () => {
+  assert.equal(
+    buildClearedStageShareText("みんなのステージ 000001", "00:42.35"),
+    "「みんなのステージ 000001」を00:42.35でクリア！挑戦してみて！",
+  );
 });
