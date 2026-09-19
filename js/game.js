@@ -63,6 +63,14 @@ const BLOCK_IMAGE_URLS = Object.freeze({
   explosive: new URL("../assets/images/block-bomb.png", import.meta.url).href,
 });
 
+const ITEM_IMAGE_URLS = Object.freeze({
+  [ITEM_TYPES.PADDLE]: new URL("../assets/images/item-paddle-wide.png", import.meta.url).href,
+  [ITEM_TYPES.MULTIBALL]: new URL("../assets/images/item-multiball.png", import.meta.url).href,
+  [ITEM_TYPES.LARGE_BALL]: new URL("../assets/images/item-large-ball.png", import.meta.url).href,
+  [ITEM_TYPES.EXPLOSIVE_BALL]: new URL("../assets/images/item-explosive-ball.png", import.meta.url).href,
+  [ITEM_TYPES.LIFE]: new URL("../assets/images/item-life.png", import.meta.url).href,
+});
+
 const BLOCK_IMAGE_CROP = Object.freeze({
   x: 9 / 256,
   y: 14 / 128,
@@ -98,6 +106,7 @@ export class BlockBreakerGame {
     this.smashFlash = 0;
     this.lastSmashSignature = "";
     this.blockImages = this.createBlockImages();
+    this.itemImages = this.createItemImages();
     this.paddle = { x: (BOARD_WIDTH - NORMAL_PADDLE_WIDTH) / 2, y: PADDLE_Y, width: NORMAL_PADDLE_WIDTH, height: 12 };
     this.animationId = null;
     this.loop = this.loop.bind(this);
@@ -106,6 +115,17 @@ export class BlockBreakerGame {
   createBlockImages() {
     if (typeof Image === "undefined") return {};
     return Object.fromEntries(Object.entries(BLOCK_IMAGE_URLS).map(([key, source]) => {
+      const image = new Image();
+      image.decoding = "async";
+      image.addEventListener("load", () => this.draw(), { once: true });
+      image.src = source;
+      return [key, image];
+    }));
+  }
+
+  createItemImages() {
+    if (typeof Image === "undefined") return {};
+    return Object.fromEntries(Object.entries(ITEM_IMAGE_URLS).map(([key, source]) => {
       const image = new Image();
       image.decoding = "async";
       image.addEventListener("load", () => this.draw(), { once: true });
@@ -1033,6 +1053,11 @@ export class BlockBreakerGame {
     const ctx = this.ctx;
     const x = item.x - item.width / 2;
     const y = item.y - item.height / 2;
+    const image = this.itemImages[item.type];
+    if (image?.complete && image.naturalWidth > 0) {
+      ctx.drawImage(image, x, y, item.width, item.height);
+      return;
+    }
     this.roundedRect(x, y, item.width, item.height, 6);
     ctx.fillStyle = item.type === ITEM_TYPES.LIFE ? "#e84259" : "#f8d44c";
     ctx.fill();
