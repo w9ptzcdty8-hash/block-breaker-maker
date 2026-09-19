@@ -1,5 +1,5 @@
 import { AudioManager } from "./audio.js";
-import { beginSharedPlay, copyShareUrl, fetchCommunityList, fetchCommunityRanking, fetchSharedStage, getSharedStageId, publishStage, reportSharedClear, shareStage } from "./community.js";
+import { beginSharedPlay, buildClearedStageShareText, copyShareUrl, fetchCommunityList, fetchCommunityRanking, fetchSharedStage, getSharedStageId, publishStage, reportSharedClear, shareStage } from "./community.js";
 import { BlockBreakerGame } from "./game.js";
 import { StageMaker } from "./maker.js";
 import { STAGES } from "./stages.js";
@@ -543,7 +543,13 @@ document.querySelector("#btn-clear-share").addEventListener("click", () => {
   void shareFromButton(
     document.querySelector("#btn-clear-share"),
     document.querySelector("#clear-share-status"),
-    { text: `「${currentStage.title}」をクリア！挑戦してみて！`, url },
+    {
+      text: buildClearedStageShareText(
+        currentStage.title,
+        document.querySelector("#clear-time").textContent,
+      ),
+      url,
+    },
   );
 });
 document.querySelector("#btn-gameover-retry").addEventListener("click", restartStage);
