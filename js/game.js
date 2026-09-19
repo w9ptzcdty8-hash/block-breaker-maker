@@ -31,8 +31,8 @@ const BLOCK_FLASH_DURATION = 0.18;
 const SMASH_MAX_CHARGE = 20;
 const SMASH_DURATION = 10;
 const SMASH_SPEED_MULTIPLIER = 1.2;
-const WARP_COOLDOWN = 0.18;
-const WARP_ROTATION_SPEED = Math.PI * 1.5;
+const WARP_COOLDOWN = 3;
+const WARP_ROTATION_SPEED = (Math.PI * 2) / 30;
 
 const EFFECT_DURATIONS = Object.freeze({
   paddle: 12,
@@ -1132,6 +1132,8 @@ export class BlockBreakerGame {
         ctx.fill();
       });
     }
+    ctx.save();
+    ctx.globalAlpha = this.getWarpBlinkOpacity(ball);
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
     ctx.fillStyle = this.smashActive ? "#fff7ad" : this.isEffectActive("explosiveBall") ? "#ff754f" : "#ffffff";
@@ -1139,6 +1141,12 @@ export class BlockBreakerGame {
     ctx.shadowBlur = this.smashActive ? 18 : this.isEffectActive("explosiveBall") ? 13 : 8;
     ctx.fill();
     ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  getWarpBlinkOpacity(ball) {
+    if ((ball.warpCooldown || 0) <= 0) return 1;
+    return Math.floor(ball.warpCooldown * 8) % 2 === 0 ? 0.25 : 1;
   }
 
   drawItem(item) {

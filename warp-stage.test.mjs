@@ -25,11 +25,13 @@ test("existing schema stays valid while warp requires schema version 2 and one p
     .filter((entry) => entry.type === BLOCK_TYPES.SOLID)
     .map((entry) => `${entry.x},${entry.y}`));
   const enclosure = [
-    ...Array.from({ length: 6 }, (_, index) => `${index + 2},0`),
-    ...Array.from({ length: 6 }, (_, index) => `${index + 2},5`),
-    ...[1, 2, 3, 4].flatMap((y) => [`2,${y}`, `7,${y}`]),
+    ...Array.from({ length: 8 }, (_, index) => `${index + 1},0`),
+    ...Array.from({ length: 8 }, (_, index) => `${index + 1},6`),
+    ...[1, 2, 3, 4, 5].flatMap((y) => [`1,${y}`, `8,${y}`]),
   ];
   enclosure.forEach((cell) => assert.equal(solidCells.has(cell), true, `${cell} must close the warp room`));
+  [7, 8, 9].flatMap((y) => [`3,${y}`, `5,${y}`])
+    .forEach((cell) => assert.equal(solidCells.has(cell), false, `${cell} must stay open around the entrance`));
 
   assert.equal(validateStage({
     ...warpStage,
@@ -60,7 +62,7 @@ test("warp preserves velocity and prevents an immediate second warp", () => {
   assert.equal(game.tryWarpBall(ball), true);
   assert.equal(ball.vx, 120);
   assert.equal(ball.vy, -240);
-  assert.ok(ball.warpCooldown > 0);
+  assert.ok(ball.warpCooldown >= 3);
   assert.equal(ball.smashContacts.size, 0);
   assert.deepEqual(ball.trail, []);
   assert.ok(Math.hypot(
@@ -68,6 +70,9 @@ test("warp preserves velocity and prevents an immediate second warp", () => {
     ball.y - (destination.y + destination.height / 2),
   ) > ball.radius);
   assert.equal(game.tryWarpBall(ball), false);
+  assert.equal(game.getWarpBlinkOpacity({ warpCooldown: 3 }), 0.25);
+  assert.equal(game.getWarpBlinkOpacity({ warpCooldown: 2.9 }), 1);
+  assert.equal(game.getWarpBlinkOpacity({ warpCooldown: 0 }), 1);
 });
 
 test("warp is indestructible and does not prevent stage clear", () => {
